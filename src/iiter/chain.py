@@ -8,7 +8,7 @@ from collections import deque
 import typing as tp
 from collections.abc import Callable, Iterable, Iterator
 import enum
-from functools import reduce, wraps
+from functools import partial, reduce, wraps
 import statistics as st
 
 ValueType = enum.Enum("ValueType", ["NA"])
@@ -28,16 +28,36 @@ type Comparable[T] = SupportsLT[T] | SupportsGT[T]
 
 def _register_stats[TNumber, R, **P](
     func: Callable[tp.Concatenate[Iterable[TNumber], P], R],
-) -> Callable[tp.Concatenate[ChainableIter.stats_[TNumber], P], R]:
+) -> Callable[tp.Concatenate[stats[TNumber], P], R]:
     @wraps(func)
     def inner(
-        self: ChainableIter.stats_[TNumber],
+        self: stats[TNumber],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> R:
         return func(iter(self.iterable), *args, **kwargs)
 
     return inner
+
+
+class stats[TNumber]:
+    def __init__(self, iterable: ChainableIter[TNumber]):
+        self.iterable = iterable
+
+    fmean = _register_stats(st.fmean)
+    geometric_mean = _register_stats(st.geometric_mean)
+    harmonic_mean = _register_stats(st.harmonic_mean)
+    pstdev = _register_stats(st.pstdev)
+    pvariance = _register_stats(st.pvariance)
+    stdev = _register_stats(st.stdev)
+    variance = _register_stats(st.variance)
+    median = _register_stats(st.median)
+    median_low = _register_stats(st.median_low)
+    median_high = _register_stats(st.median_high)
+    median_grouped = _register_stats(st.median_grouped)
+    mode = _register_stats(st.mode)
+    multimode = _register_stats(st.multimode)
+    quantiles = _register_stats(st.quantiles)
 
 
 class MethodType[T]:
@@ -133,7 +153,7 @@ class ChainableIter[T](Iterable[T]):
 
     def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:
         func = tp.cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
-        return self.map(func)
+        return self.partial_map(func)
 
     compress = MethodType[T].augmentor(it.compress)
     pairwise = MethodType[T].augmentor(it.pairwise)
@@ -153,7 +173,7 @@ class ChainableIter[T](Iterable[T]):
 
     @tp.override
     def __iter__(self) -> Iterator[T]:
-        return iter(self.__next__, None)
+        return iter(self.__next__, ValueType.NA)
 
     def __next__(self) -> T:
         self.last_yielded_value = next(self._iter)
@@ -163,13 +183,23 @@ class ChainableIter[T](Iterable[T]):
             self.last_yielded_index += 1
         return self.last_yielded_value
 
-    def map[R, **P](
+    def partial_map[R, **P](
         self,
         func: Callable[tp.Concatenate[T, P], R],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ChainableIter[R]:
-        return ChainableIter(map(func, self, *args, **kwargs))
+        # breakpoint()
+        f = partial(func, *args, **kwargs)
+        itr = iter(map(f, self))
+        return ChainableIter(itr)
+
+    def map[K, R](
+        self,
+        func: Callable[tp.Concatenate[T, ...], R],
+        *args: Iterable[K],
+    ) -> ChainableIter[R]:
+        return ChainableIter(map(func, self, *args))
 
     def feed_into[R, **P](
         self,
@@ -381,34 +411,17 @@ class ChainableIter[T](Iterable[T]):
         return ChainableIter(zip(self, iter1, iter2, iter3, strict=strict))
 
     def transpose(
-        self,
-        *iters: Iterable[tp.Any],
+        self: ChainableIter[T],
         strict: bool = False,
-    ) -> ChainableIter[tuple[tp.Any, ...]]:
-        return ChainableIter(zip(self))
-
-    class stats_[TNumber]:
-        def __init__(self, iterable: ChainableIter[TNumber]):
-            self.iterable = iterable
-
-        fmean = _register_stats(st.fmean)
-        geometric_mean = _register_stats(st.geometric_mean)
-        harmonic_mean = _register_stats(st.harmonic_mean)
-        pstdev = _register_stats(st.pstdev)
-        pvariance = _register_stats(st.pvariance)
-        stdev = _register_stats(st.stdev)
-        variance = _register_stats(st.variance)
-        median = _register_stats(st.median)
-        median_low = _register_stats(st.median_low)
-        median_high = _register_stats(st.median_high)
-        median_grouped = _register_stats(st.median_grouped)
-        mode = _register_stats(st.mode)
-        multimode = _register_stats(st.multimode)
-        quantiles = _register_stats(st.quantiles)
+    ) -> ChainableIter[T]:
+        return ChainableIter(zip(*self))
 
     @property
-    def stats(self: ChainableIter[TNumber]) -> ChainableIter.stats_[TNumber]:
-        return self.stats_[TNumber](self)
+    def stats(self: ChainableIter[TNumber]) -> stats[TNumber]:
+        return stats[TNumber](self)
+
+    def map_type[R](self, type: type[R]) -> ChainableIter[R]:
+        return self.map(type)
 
 
 if __name__ == "__main__":
@@ -418,3 +431,14 @@ if __name__ == "__main__":
     print(ch.last_yielded_index)
     print(ch.peek_next_index())
     print(ch.peek_next_value())
+    ch1 = (
+        ChainableIter(range(1, 100))
+        .skip_take(skip=2, take=3, take_first=True)
+        .map_type(float)
+        .skip_take(skip=5, take=5)
+        .batched(5)
+        .transpose()
+        .partial_map(sum, start=0.0)
+        .to_list()
+    )
+    print(ch1)
