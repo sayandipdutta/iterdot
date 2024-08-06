@@ -1,20 +1,48 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from fractions import Fraction
 import itertools as it
 from operator import attrgetter
-import typing as tp
 from collections import deque
+import typing as tp
 from collections.abc import Callable, Iterable, Iterator
 import enum
 from functools import reduce, wraps
-from typing_extensions import cast, override
+import statistics as st
 
 ValueType = enum.Enum("ValueType", ["NA"])
+TNumber = tp.TypeVar("TNumber", float, Decimal, Fraction)
 
 
-class MethodType[T, R]:
+class SupportsLT[T](tp.Protocol):
+    def __lt__(self, other: T) -> bool: ...
+
+
+class SupportsGT[T](tp.Protocol):
+    def __gt__(self, other: T) -> bool: ...
+
+
+type Comparable[T] = SupportsLT[T] | SupportsGT[T]
+
+
+def _register_stats[TNumber, R, **P](
+    func: Callable[tp.Concatenate[Iterable[TNumber], P], R],
+) -> Callable[tp.Concatenate[ChainableIter.stats_[TNumber], P], R]:
+    @wraps(func)
+    def inner(
+        self: ChainableIter.stats_[TNumber],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        return func(iter(self.iterable), *args, **kwargs)
+
+    return inner
+
+
+class MethodType[T]:
     @staticmethod
-    def consumer[**P](
+    def consumer[**P, R](
         func: Callable[tp.Concatenate[Iterable[T], P], R],
     ) -> Callable[tp.Concatenate[ChainableIter[T], P], R]:
         @wraps(func)
@@ -24,7 +52,7 @@ class MethodType[T, R]:
         return inner
 
     @staticmethod
-    def augmentor[**P](
+    def augmentor[**P, R](
         func: Callable[tp.Concatenate[Iterable[T], P], Iterable[R]],
     ) -> Callable[tp.Concatenate[ChainableIter[T], P], ChainableIter[R]]:
         @wraps(func)
@@ -36,7 +64,7 @@ class MethodType[T, R]:
         return inner
 
     @staticmethod
-    def predicated_augmentor[**P](
+    def predicated_augmentor[**P, R](
         func: Callable[
             tp.Concatenate[Callable[[T], bool], Iterable[T], P], Iterable[R]
         ],
@@ -54,16 +82,6 @@ class MethodType[T, R]:
 
         return inner
 
-    @staticmethod
-    def chained[**P](
-        func: Callable[P, Iterator[R]],
-    ) -> Callable[P, ChainableIter[R]]:
-        @wraps(func)
-        def inner(*args: P.args, **kwargs: P.kwargs) -> ChainableIter[R]:
-            return ChainableIter(func(*args, **kwargs))
-
-        return inner
-
 
 def prepend[T](iterable: Iterator[T], *val: T) -> Iterator[T]:
     yield from val
@@ -71,12 +89,16 @@ def prepend[T](iterable: Iterator[T], *val: T) -> Iterator[T]:
 
 
 class ChainableIter[T](Iterable[T]):
-    def __init__(self, iterable: Iterable[T], copy_indices: bool = False) -> None:
+    def __init__(self, iterable: Iterable[T], copy_state: bool = False) -> None:
         self.iterable = iterable
         self._iter = iter(iterable)
-        if copy_indices:
+        self.last_yielded_value: T | tp.Literal[ValueType.NA] = ValueType.NA
+        self.last_yielded_index: int = -1
+        if copy_state:
             if isinstance(self.iterable, ChainableIter):
                 self._counter = self.iterable.indices()
+                self.last_yielded_value = self.iterable.last_yielded_value
+                self.last_yielded_index = self.iterable.last_yielded_index
             else:
                 raise ValueError(
                     "`iterable` is not an instance of ChainableIter, cannot copy indices"
@@ -87,10 +109,12 @@ class ChainableIter[T](Iterable[T]):
     def indices(self) -> Iterator[int]:
         return self._counter
 
-    def next_index(self) -> int:
-        val = next(self._counter)
-        self._counter = prepend(self._counter, val)
-        return val
+    def peek_next_index(self) -> int:
+        if self.last_yielded_index is ValueType.NA:
+            return 0
+        if self.peek_next_value() is ValueType.NA:
+            return -1
+        return self.last_yielded_index + 1
 
     def reset_index(self, index: int = 0):
         self._counter = it.count(index)
@@ -108,29 +132,36 @@ class ChainableIter[T](Iterable[T]):
         return next(self) if default is ValueType.NA else next(self, default)
 
     def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:
-        func = cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
+        func = tp.cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
         return self.map(func)
 
-    compress = MethodType[T, T].augmentor(it.compress)
-    pairwise = MethodType[T, tuple[T, T]].augmentor(it.pairwise)
-    batched = MethodType[T, tuple[T, ...]].augmentor(it.batched)
-    accumulate = MethodType[T, T].augmentor(it.accumulate)
-    chain = MethodType[T, T].augmentor(it.chain)
-    slice = MethodType[T, T].augmentor(it.islice)
-    transpose = MethodType[T, tuple[T]].augmentor(zip)
+    compress = MethodType[T].augmentor(it.compress)
+    pairwise = MethodType[T].augmentor(it.pairwise)
+    batched = MethodType[T].augmentor(it.batched)
+    accumulate = MethodType[T].augmentor(it.accumulate)
+    chain = MethodType[T].augmentor(it.chain)
+    slice = MethodType[T].augmentor(it.islice)
+    zipn = MethodType[T].augmentor(zip)
 
-    takewhile = MethodType[T, T].predicated_augmentor(it.takewhile)
-    dropwhile = MethodType[T, T].predicated_augmentor(it.dropwhile)
+    takewhile = MethodType[T].predicated_augmentor(it.takewhile)
+    dropwhile = MethodType[T].predicated_augmentor(it.dropwhile)
 
-    sum = MethodType[T, T].consumer(sum)
-    to_list = MethodType[T, list[T]].consumer(list)
+    sum = MethodType[T].consumer(sum)
+    min = MethodType[Comparable[T]].consumer(min)
+    max = MethodType[Comparable[T]].consumer(max)
+    to_list = MethodType[T].consumer(list)
 
-    @override
+    @tp.override
     def __iter__(self) -> Iterator[T]:
         return iter(self.__next__, None)
 
     def __next__(self) -> T:
-        return next(self._iter)
+        self.last_yielded_value = next(self._iter)
+        if self.last_yielded_index is ValueType.NA:
+            self.last_yielded_index = 0
+        else:
+            self.last_yielded_index += 1
+        return self.last_yielded_value
 
     def map[R, **P](
         self,
@@ -138,7 +169,7 @@ class ChainableIter[T](Iterable[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ChainableIter[R]:
-        return ChainableIter(map(func, self._iter, *args, **kwargs))
+        return ChainableIter(map(func, self, *args, **kwargs))
 
     def feed_into[R, **P](
         self,
@@ -146,31 +177,27 @@ class ChainableIter[T](Iterable[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> R:
-        return func(self._iter, *args, **kwargs)
+        return func(self, *args, **kwargs)
 
     def filter(
         self, predicate: Callable[[T], bool] | None, when: bool = True
     ) -> ChainableIter[T]:
         filter_func = filter[T] if when else it.filterfalse[T]
-        return ChainableIter(filter_func(predicate, self._iter))
+        return ChainableIter(filter_func(predicate, self))
 
     def starmap[*Ts, R](
         self: ChainableIter[tuple[*Ts]], func: Callable[[*Ts], R]
     ) -> ChainableIter[R]:
-        return ChainableIter(it.starmap(func, self._iter))
-
-    def tee(self) -> ChainableIter[T]:
-        self._iter, copy = it.tee(self._iter)
-        return ChainableIter(copy)
+        return ChainableIter(it.starmap(func, self))
 
     def first(self) -> T:
-        return next(iter(self._iter))
+        return next(iter(self))
 
     def nth_or_last(self, n: int) -> T:
         return self.slice(n).last()
 
     def last(self) -> T:
-        return deque(self._iter, maxlen=1).popleft()
+        return deque(self, maxlen=1).popleft()
 
     def tail(self, n: int) -> ChainableIter[T]:
         return ChainableIter(deque(self, maxlen=n))
@@ -353,14 +380,41 @@ class ChainableIter[T](Iterable[T]):
     ) -> ChainableIter[tuple[T, T1, T2, T3]]:
         return ChainableIter(zip(self, iter1, iter2, iter3, strict=strict))
 
-    def zipn(
+    def transpose(
         self,
         *iters: Iterable[tp.Any],
         strict: bool = False,
     ) -> ChainableIter[tuple[tp.Any, ...]]:
-        return ChainableIter(zip(self, *iters, strict=strict))
+        return ChainableIter(zip(self))
+
+    class stats_[TNumber]:
+        def __init__(self, iterable: ChainableIter[TNumber]):
+            self.iterable = iterable
+
+        fmean = _register_stats(st.fmean)
+        geometric_mean = _register_stats(st.geometric_mean)
+        harmonic_mean = _register_stats(st.harmonic_mean)
+        pstdev = _register_stats(st.pstdev)
+        pvariance = _register_stats(st.pvariance)
+        stdev = _register_stats(st.stdev)
+        variance = _register_stats(st.variance)
+        median = _register_stats(st.median)
+        median_low = _register_stats(st.median_low)
+        median_high = _register_stats(st.median_high)
+        median_grouped = _register_stats(st.median_grouped)
+        mode = _register_stats(st.mode)
+        multimode = _register_stats(st.multimode)
+        quantiles = _register_stats(st.quantiles)
+
+    @property
+    def stats(self: ChainableIter[TNumber]) -> ChainableIter.stats_[TNumber]:
+        return self.stats_[TNumber](self)
 
 
 if __name__ == "__main__":
-    ch = ChainableIter(range(10)).skip_take(skip=2, take=3, take_first=True).to_list()
-    print(ch)
+    ch = ChainableIter(range(1, 10)).skip_take(skip=2, take=3, take_first=True)
+    ch.consume()
+    print(ch.last_yielded_value)
+    print(ch.last_yielded_index)
+    print(ch.peek_next_index())
+    print(ch.peek_next_value())
