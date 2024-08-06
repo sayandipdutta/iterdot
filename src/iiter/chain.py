@@ -1,9 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 import enum
 from functools import reduce
-from itertools import accumulate, chain, zip_longest
+from itertools import (
+    accumulate,
+    batched,
+    chain,
+    compress,
+    dropwhile,
+    filterfalse,
+    pairwise,
+    starmap,
+    takewhile,
+    zip_longest,
+)
 from typing import (
     Any,
     Concatenate,
@@ -29,42 +40,53 @@ class ChainableIter[T](Iterable[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ChainableIter[R]:
-        return ChainableIter(map(func, self, *args, **kwargs))
+        return ChainableIter(map(func, self.iterable, *args, **kwargs))
 
     def feed_into[R, **P](
         self,
-        func: Callable[Concatenate[ChainableIter[T], P], R],
+        func: Callable[Concatenate[Iterable[T], P], R],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> R:
-        return func(self, *args, **kwargs)
+        return func(self.iterable, *args, **kwargs)
 
     def accumulate(
         self, func: Callable[[T, T], T], *, initial: T | None = None
     ) -> ChainableIter[T]:
-        return ChainableIter(accumulate(self, func, initial=initial))
+        return ChainableIter(accumulate(self.iterable, func, initial=initial))
 
-    def batched(self, n: int = 2) -> ChainableIter[tuple[T, ...]]: ...
+    def batched(self, n: int = 2) -> ChainableIter[tuple[T, ...]]:
+        return ChainableIter(batched(self.iterable, n))
 
-    def compress(self, selectors: Iterable[SupportsIndex]) -> ChainableIter[T]: ...
+    def compress(self, selectors: Iterable[SupportsIndex]) -> ChainableIter[T]:
+        return ChainableIter(compress(self.iterable, selectors))
 
-    def dropwhile(self, predicate: Callable[[T], bool]) -> ChainableIter[T]: ...
+    def dropwhile(self, predicate: Callable[[T], bool]) -> ChainableIter[T]:
+        return ChainableIter(dropwhile(predicate, self.iterable))
 
-    def takewhile(self, predicate: Callable[[T], bool]) -> ChainableIter[T]: ...
+    def takewhile(self, predicate: Callable[[T], bool]) -> ChainableIter[T]:
+        return ChainableIter(takewhile(predicate, self.iterable))
 
-    def filter(self, predicate: Callable[[T], bool]) -> ChainableIter[T]: ...
+    def filter(
+        self, predicate: Callable[[T], bool] | None, when: bool = True
+    ) -> ChainableIter[T]:
+        filter_func = filter[T] if when else filterfalse[T]
+        return ChainableIter(filter_func(predicate, self.iterable))
 
-    def filterfalse(self, predicate: Callable[[T], bool]) -> ChainableIter[T]: ...
+    def pairwise(self) -> ChainableIter[tuple[T, T]]:
+        return ChainableIter(pairwise(self.iterable))
 
-    def pairwise(self) -> ChainableIter[tuple[T, T]]: ...
-
-    def starmap(self) -> ChainableIter[T]: ...
+    def starmap[*Ts, R](
+        self: ChainableIter[tuple[*Ts]], func: Callable[[*Ts], R]
+    ) -> ChainableIter[R]:
+        return ChainableIter(starmap(func, self.iterable))
 
     def tee(self) -> ChainableIter[T]: ...
 
-    def first(self) -> T: ...
+    def first(self) -> T:
+        return next(iter(self.iterable))
 
-    def nth(self, n: int) -> T: ...
+    def nth_or_last(self, n: int) -> T: ...
 
     def slice(self, n: int) -> ChainableIter[T]: ...
 
