@@ -229,6 +229,14 @@ class ChainableIter[T](Iterable[T]):
     def last(self) -> T:
         return deque(self, maxlen=1).popleft()
 
+    def last_or_default[TDefault](
+        self, default: TDefault = ValueType.NA
+    ) -> T | TDefault:
+        try:
+            return deque(self, maxlen=1).popleft()
+        except ValueError:
+            return default
+
     def tail(self, n: int) -> ChainableIter[T]:
         return ChainableIter(deque(self, maxlen=n))
 
