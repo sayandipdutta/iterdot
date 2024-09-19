@@ -269,6 +269,11 @@ class ChainableIter[T](Iterable[T]):
     def first(self) -> T:
         return next(iter(self))
 
+    def first_or_default[TDefault](
+        self, default: TDefault = ValueType.NA
+    ) -> T | TDefault:
+        return next(iter(self), default)
+
     def nth_or_last(self, n: int) -> T:
         return self.slice(n).last()
 
