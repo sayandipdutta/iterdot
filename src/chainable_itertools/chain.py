@@ -246,7 +246,7 @@ class ChainableIter[T](Iterable[T]):
     def skip(self, n: int) -> ChainableIter[T]:
         return self.slice(n + 1, None)
 
-    def consume(self) -> None:
+    def exhaust(self) -> None:
         out = deque(self, maxlen=0)
         del out
 
