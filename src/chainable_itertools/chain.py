@@ -250,6 +250,9 @@ class ChainableIter[T](Iterable[T]):
         out = deque(self, maxlen=0)
         del out
 
+    def foreach[R](self, func: Callable[[T], None]) -> None:
+        self.map(func).exhaust()
+
     @staticmethod
     def _get_skip_take_selectors(
         s1: tuple[bool, int], s2: tuple[bool, int]
