@@ -15,15 +15,9 @@ ValueType = enum.Enum("ValueType", ["NA"])
 TNumber = tp.TypeVar("TNumber", float, Decimal, Fraction)
 
 
-class SupportsLT[T](tp.Protocol):
-    def __lt__(self, other: T) -> bool: ...
-
-
-class SupportsGT[T](tp.Protocol):
-    def __gt__(self, other: T) -> bool: ...
-
-
-type Comparable[T] = SupportsLT[T] | SupportsGT[T]
+class Comparable[T](tp.Protocol):
+    def __lt__(self: T, other: T, /) -> bool: ...
+    def __gt__(self: T, other: T, /) -> bool: ...
 
 
 def _register_stats[TNumber, R, **P](
@@ -151,7 +145,7 @@ class ChainableIter[T](Iterable[T]):
     def next_value[TDefault](self, default: TDefault = ValueType.NA) -> T | TDefault:
         return next(self) if default is ValueType.NA else next(self, default)
 
-    def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:
+    def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:  # pyright: ignore[reportUnusedParameter]
         func = tp.cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
         return self.partial_map(func)
 
@@ -167,9 +161,61 @@ class ChainableIter[T](Iterable[T]):
     dropwhile = MethodType[T].predicated_augmentor(it.dropwhile)
 
     sum = MethodType[T].consumer(sum)
-    min = MethodType[Comparable[T]].consumer(min)
-    max = MethodType[Comparable[T]].consumer(max)
     to_list = MethodType[T].consumer(list)
+
+    @tp.overload
+    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[ValueType.NA] = ValueType.NA,
+    ) -> TComparable: ...
+    @tp.overload
+    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = ValueType.NA,
+    ) -> TComparable | F: ...
+    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = ValueType.NA,
+    ) -> TComparable | F:
+        match (key, default):
+            case (None, ValueType.NA):
+                return max(self)
+            case (None, _):
+                return max(self, default=default)
+            case (_, ValueType.NA):
+                return max(self, key=key)
+            case _:
+                return max(self, key=key, default=default)
+
+    @tp.overload
+    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[ValueType.NA] = ValueType.NA,
+    ) -> TComparable: ...
+    @tp.overload
+    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = ValueType.NA,
+    ) -> TComparable | F: ...
+    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = ValueType.NA,
+    ) -> TComparable | F:
+        match (key, default):
+            case (None, ValueType.NA):
+                return min(self)
+            case (None, _):
+                return min(self, default=default)
+            case (_, ValueType.NA):
+                return min(self, key=key)
+            case _:
+                return min(self, key=key, default=default)
 
     @tp.override
     def __iter__(self) -> Iterator[T]:
@@ -410,6 +456,7 @@ class ChainableIter[T](Iterable[T]):
             raise ValueError("Cannot specify both fill_value and strict")
         return ChainableIter(itbl)
 
+    # TODO: overload zip4
     def zip4[T1, T2, T3](
         self,
         iter1: Iterable[T1],
@@ -450,6 +497,6 @@ if __name__ == "__main__":
         .batched(5)
         .transpose()
         .partial_map(sum, start=0.0)
-        .to_list()
+        .min()
     )
     print(ch1)
