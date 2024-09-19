@@ -425,7 +425,7 @@ class ChainableIter[T](Iterable[T]):
         self: ChainableIter[T],
         strict: bool = False,
     ) -> ChainableIter[T]:
-        return ChainableIter(zip(*self))
+        return ChainableIter(zip(*self, strict=strict))
 
     @property
     def stats(self: ChainableIter[TNumber]) -> stats[TNumber]:
@@ -437,7 +437,7 @@ class ChainableIter[T](Iterable[T]):
 
 if __name__ == "__main__":
     ch = ChainableIter(range(1, 10)).skip_take(skip=2, take=3, take_first=True)
-    ch.consume()
+    ch.exhaust()
     print(ch.last_yielded_value)
     print(ch.last_yielded_index)
     print(ch.peek_next_index())
