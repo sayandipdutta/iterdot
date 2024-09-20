@@ -11,6 +11,7 @@ import enum
 from functools import partial, reduce, wraps
 import statistics as st
 
+# TODO: add NotGiven, Exhausted, Default variant
 ValueType = enum.Enum("ValueType", ["NA"])
 TNumber = tp.TypeVar("TNumber", float, Decimal, Fraction)
 
@@ -54,7 +55,7 @@ class stats[TNumber]:
     quantiles = _register_stats(st.quantiles)
 
 
-class MethodType[T]:
+class MethodKind[T]:
     @staticmethod
     def consumer[**P, R](
         func: Callable[tp.Concatenate[Iterable[T], P], R],
@@ -97,71 +98,59 @@ class MethodType[T]:
         return inner
 
 
-def prepend[T](iterable: Iterator[T], *val: T) -> Iterator[T]:
-    yield from val
-    yield from iterable
+def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
+    return it.chain(val, to)
 
 
 class ChainableIter[T](Iterable[T]):
-    def __init__(self, iterable: Iterable[T], copy_state: bool = False) -> None:
+    def __init__(self, iterable: Iterable[T]) -> None:
+        # TODO: Consider making property
         self.iterable = iterable
-        self._iter = iter(iterable)
+        self._iter = (
+            iter(iterable)
+            if not isinstance(iterable, ChainableIter)
+            else iterable._iter
+        )
+        # NOTE: consider making property
         self.last_yielded_value: T | tp.Literal[ValueType.NA] = ValueType.NA
         self.last_yielded_index: int = -1
-        if copy_state:
-            if isinstance(self.iterable, ChainableIter):
-                self._counter = self.iterable.indices()
-                self.last_yielded_value = self.iterable.last_yielded_value
-                self.last_yielded_index = self.iterable.last_yielded_index
-            else:
-                raise ValueError(
-                    "`iterable` is not an instance of ChainableIter, cannot copy indices"
-                )
-        else:
-            self._counter: Iterator[int] = it.count()
-
-    def indices(self) -> Iterator[int]:
-        return self._counter
 
     def peek_next_index(self) -> int:
-        if self.last_yielded_index is ValueType.NA:
-            return 0
-        if self.peek_next_value() is ValueType.NA:
-            return -1
         return self.last_yielded_index + 1
-
-    def reset_index(self, index: int = 0):
-        self._counter = it.count(index)
 
     def peek_next_value[TDefault](
         self, default: TDefault = ValueType.NA
     ) -> T | TDefault:
         item = default
         for item in self:
-            self._iter = prepend(self, item)
+            # TODO: consider moving prepend logic in init
+            self._iter = prepend(item, to=self._iter)
+            self.last_yielded_index -= 1
             break
         return item
 
+    # NOTE: consider if it should error
     def next_value[TDefault](self, default: TDefault = ValueType.NA) -> T | TDefault:
         return next(self) if default is ValueType.NA else next(self, default)
 
-    def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:  # pyright: ignore[reportUnusedParameter]
+    # TODO: Replace type[K] with TypeForm (when available)
+    def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:
         func = tp.cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
         return self.partial_map(func)
 
-    compress = MethodType[T].augmentor(it.compress)
-    pairwise = MethodType[T].augmentor(it.pairwise)
-    batched = MethodType[T].augmentor(it.batched)
-    accumulate = MethodType[T].augmentor(it.accumulate)
-    chain = MethodType[T].augmentor(it.chain)
-    slice = MethodType[T].augmentor(it.islice)
-    zipn = MethodType[T].augmentor(zip)
+    compress = MethodKind[T].augmentor(it.compress)
+    pairwise = MethodKind[T].augmentor(it.pairwise)
+    batched = MethodKind[T].augmentor(it.batched)
+    accumulate = MethodKind[T].augmentor(it.accumulate)
+    chain = MethodKind[T].augmentor(it.chain)
+    slice = MethodKind[T].augmentor(it.islice)
+    zipn = MethodKind[T].augmentor(zip)
 
-    takewhile = MethodType[T].predicated_augmentor(it.takewhile)
-    dropwhile = MethodType[T].predicated_augmentor(it.dropwhile)
+    takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
+    dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
 
-    sum = MethodType[T].consumer(sum)
-    to_list = MethodType[T].consumer(list)
+    sum = MethodKind[T].consumer(sum)
+    to_list = MethodKind[T].consumer(list)
 
     @tp.overload
     def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
@@ -219,7 +208,7 @@ class ChainableIter[T](Iterable[T]):
 
     @tp.override
     def __iter__(self) -> Iterator[T]:
-        return iter(self.__next__, ValueType.NA)
+        return self
 
     def __next__(self) -> T:
         self.last_yielded_value = next(self._iter)
@@ -312,6 +301,12 @@ class ChainableIter[T](Iterable[T]):
             yield from it.repeat(*s1)
             yield from it.repeat(*s2)
 
+    # TODO: explore if take_first can be emulated with
+    # order of arguments, i.e. by looking at the order
+    # of **kwargs, where **kwargs: TypedDict[skip: int, take: int]
+    # also check if signature can be overloaded
+    # if not, explore decorator approach to patch `take_first`
+    # argument based on order of kw args.
     def skip_take(
         self, *, skip: int, take: int, take_first: bool = False
     ) -> ChainableIter[T]:
