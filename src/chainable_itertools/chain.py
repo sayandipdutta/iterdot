@@ -6,14 +6,22 @@ import itertools as it
 from operator import attrgetter
 from collections import deque
 import typing as tp
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sized
 import enum
 from functools import partial, reduce, wraps
 import statistics as st
 
-# TODO: add NotGiven, Exhausted, Default variant
-ValueType = enum.Enum("ValueType", ["NA"])
-TNumber = tp.TypeVar("TNumber", float, Decimal, Fraction)
+
+class Default(enum.Enum):
+    Exhausted = enum.auto()
+    NoDefault = enum.auto()
+    Unavailable = enum.auto()
+
+
+# TODO: Replace with enum.global_enum if ever supported in pyright
+Exhausted: tp.Literal[Default.Exhausted] = Default.Exhausted
+NoDefault: tp.Literal[Default.NoDefault] = Default.NoDefault
+Unavailable: tp.Literal[Default.Unavailable] = Default.Unavailable
 
 
 class Comparable[T](tp.Protocol):
@@ -21,7 +29,8 @@ class Comparable[T](tp.Protocol):
     def __gt__(self: T, other: T, /) -> bool: ...
 
 
-def _register_stats[TNumber, R, **P](
+# TODO: a better way to register modules
+def _register_stats[R, **P, TNumber: (float, Decimal, Fraction) = float](
     func: Callable[tp.Concatenate[Iterable[TNumber], P], R],
 ) -> Callable[tp.Concatenate[stats[TNumber], P], R]:
     @wraps(func)
@@ -35,7 +44,7 @@ def _register_stats[TNumber, R, **P](
     return inner
 
 
-class stats[TNumber]:
+class stats[TNumber: (float, Decimal, Fraction) = float]:
     def __init__(self, iterable: ChainableIter[TNumber]):
         self.iterable = iterable
 
@@ -102,49 +111,71 @@ def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
     return it.chain(val, to)
 
 
+def flatten(iterable: Iterable[object]) -> Iterable[object]:
+    for item in iterable:
+        if isinstance(item, Iterable):
+            yield from flatten(tp.cast(Iterable[object], item))
+        yield item
+
+
 class ChainableIter[T](Iterable[T]):
     def __init__(self, iterable: Iterable[T]) -> None:
-        # TODO: Consider making property
         self.iterable = iterable
         self._iter = (
             iter(iterable)
             if not isinstance(iterable, ChainableIter)
             else iterable._iter
         )
-        # NOTE: consider making property
-        self.last_yielded_value: T | tp.Literal[ValueType.NA] = ValueType.NA
-        self.last_yielded_index: int = -1
+        self._last_yielded_value: T | tp.Literal[Default.Unavailable] = Unavailable
+        self._last_yielded_index: int = -1
 
     def peek_next_index(self) -> int:
-        return self.last_yielded_index + 1
+        return self._last_yielded_index + 1
 
-    def peek_next_value[TDefault](
-        self, default: TDefault = ValueType.NA
-    ) -> T | TDefault:
+    @tp.overload
+    def peek_next_value(
+        self, default: tp.Literal[Default.Exhausted] = Exhausted
+    ) -> T | tp.Literal[Default.Exhausted]: ...
+    @tp.overload
+    def peek_next_value[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def peek_next_value[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
         item = default
         for item in self:
-            # TODO: consider moving prepend logic in init
             self._iter = prepend(item, to=self._iter)
-            self.last_yielded_index -= 1
+            self._last_yielded_index -= 1
             break
         return item
 
-    # NOTE: consider if it should error
-    def next_value[TDefault](self, default: TDefault = ValueType.NA) -> T | TDefault:
-        return next(self) if default is ValueType.NA else next(self, default)
+    @property
+    def last_yielded_value(self) -> T | tp.Literal[Default.Unavailable]:
+        return self._last_yielded_value
 
+    @property
+    def last_yielded_index(self) -> int:
+        return self._last_yielded_index
+
+    # NOTE: consider if it should error
+    @tp.overload
+    def next_value[TDefault](
+        self, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def next_value[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def next_value[TDefault](self, default: TDefault = NoDefault) -> T | TDefault:
+        return next(self) if default is NoDefault else next(self, default)
+
+    # TODO: add itemgetter
     # TODO: Replace type[K] with TypeForm (when available)
-    def get_attribute[K](self, name: str, type: type[K]) -> ChainableIter[K]:
-        func = tp.cast(Callable[[T], K], attrgetter(name))  # pyright: ignore[reportInvalidCast]
-        return self.partial_map(func)
+    def getattr[K](self, *names: str, type: type[K]) -> ChainableIter[K]:
+        func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
+        return self.map_partial(func)
 
     compress = MethodKind[T].augmentor(it.compress)
     pairwise = MethodKind[T].augmentor(it.pairwise)
     batched = MethodKind[T].augmentor(it.batched)
     accumulate = MethodKind[T].augmentor(it.accumulate)
-    chain = MethodKind[T].augmentor(it.chain)
     slice = MethodKind[T].augmentor(it.islice)
-    zipn = MethodKind[T].augmentor(zip)
+    zip_with = MethodKind[T].augmentor(zip)
 
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
@@ -156,52 +187,53 @@ class ChainableIter[T](Iterable[T]):
     def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: tp.Literal[ValueType.NA] = ValueType.NA,
+        default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
     def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: F = ValueType.NA,
+        default: F = NoDefault,
     ) -> TComparable | F: ...
     def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: F = ValueType.NA,
+        default: F = NoDefault,
     ) -> TComparable | F:
         match (key, default):
-            case (None, ValueType.NA):
+            case (None, Default.NoDefault):
                 return max(self)
             case (None, _):
                 return max(self, default=default)
-            case (_, ValueType.NA):
+            case (_, Default.NoDefault):
                 return max(self, key=key)
             case _:
                 return max(self, key=key, default=default)
 
+    # TODO: Add minmax
     @tp.overload
     def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: tp.Literal[ValueType.NA] = ValueType.NA,
+        default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
     def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: F = ValueType.NA,
+        default: F = Default.NoDefault,
     ) -> TComparable | F: ...
     def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
-        default: F = ValueType.NA,
+        default: F = Default.NoDefault,
     ) -> TComparable | F:
         match (key, default):
-            case (None, ValueType.NA):
+            case (None, Default.NoDefault):
                 return min(self)
             case (None, _):
                 return min(self, default=default)
-            case (_, ValueType.NA):
+            case (_, Default.NoDefault):
                 return min(self, key=key)
             case _:
                 return min(self, key=key, default=default)
@@ -211,24 +243,34 @@ class ChainableIter[T](Iterable[T]):
         return self
 
     def __next__(self) -> T:
-        self.last_yielded_value = next(self._iter)
-        if self.last_yielded_index is ValueType.NA:
-            self.last_yielded_index = 0
+        self._last_yielded_value = next(self._iter)
+        if self._last_yielded_index is Default.Unavailable:
+            self._last_yielded_index = 0
         else:
-            self.last_yielded_index += 1
-        return self.last_yielded_value
+            self._last_yielded_index += 1
+        return self._last_yielded_value
 
-    def partial_map[R, **P](
+    def map_partial[R, **P](
         self,
         func: Callable[tp.Concatenate[T, P], R],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ChainableIter[R]:
-        # breakpoint()
         f = partial(func, *args, **kwargs)
         itr = iter(map(f, self))
         return ChainableIter(itr)
 
+    @tp.overload
+    def map[K, R](
+        self,
+        func: Callable[[T], R],
+    ) -> ChainableIter[R]: ...
+    @tp.overload
+    def map[K, _, R, **P](
+        self,
+        func: Callable[tp.Concatenate[T, _, ...], R],
+        *args: Iterable[K],
+    ) -> ChainableIter[R]: ...
     def map[K, R](
         self,
         func: Callable[tp.Concatenate[T, ...], R],
@@ -245,46 +287,56 @@ class ChainableIter[T](Iterable[T]):
         return func(self, *args, **kwargs)
 
     def filter(
-        self, predicate: Callable[[T], bool] | None, when: bool = True
+        self, predicate: Callable[[T], bool] | None, *, when: bool = True
     ) -> ChainableIter[T]:
-        filter_func = filter[T] if when else it.filterfalse[T]
-        return ChainableIter(filter_func(predicate, self))
+        if when:
+            return ChainableIter(filter(predicate, self._iter))
+        else:
+            return ChainableIter(it.filterfalse(predicate, self._iter))
 
     def starmap[*Ts, R](
         self: ChainableIter[tuple[*Ts]], func: Callable[[*Ts], R]
     ) -> ChainableIter[R]:
-        return ChainableIter(it.starmap(func, self))
+        return ChainableIter(it.starmap(func, self._iter))
 
-    def first(self) -> T:
-        return next(iter(self))
+    @tp.overload
+    def first[TDefault](
+        self, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def first[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        return next(self) if default is NoDefault else next(self, default)
 
-    def first_or_default[TDefault](
-        self, default: TDefault = ValueType.NA
-    ) -> T | TDefault:
-        return next(iter(self), default)
+    # TODO: support getitem
+    @tp.overload
+    def at[TDefault](
+        self, n: int, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def at[TDefault](self, n: int, default: TDefault) -> T | TDefault: ...
+    def at[TDefault](self, n: int, default: TDefault = Exhausted) -> T | TDefault:
+        return self.skip(n).next_value(default)
 
-    def nth_or_last(self, n: int) -> T:
-        return self.slice(n).last()
-
-    def last(self) -> T:
-        return deque(self, maxlen=1).popleft()
-
-    def last_or_default[TDefault](
-        self, default: TDefault = ValueType.NA
-    ) -> T | TDefault:
+    @tp.overload
+    def last[TDefault](
+        self, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def last[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
         try:
             return deque(self, maxlen=1).popleft()
-        except ValueError:
+        except IndexError:
+            if default is NoDefault:
+                raise StopIteration("Underlying iterable is empty")
             return default
 
     def tail(self, n: int) -> ChainableIter[T]:
         return ChainableIter(deque(self, maxlen=n))
 
-    def take(self, n: int) -> ChainableIter[T]:
-        return self.slice(n)
-
     def skip(self, n: int) -> ChainableIter[T]:
-        return self.slice(n + 1, None)
+        return self if not n else self.slice(n, None)
 
     def exhaust(self) -> None:
         out = deque(self, maxlen=0)
@@ -338,6 +390,7 @@ class ChainableIter[T](Iterable[T]):
             it.chain(tp.cast(ChainableIter[T], self), it.chain.from_iterable(iterable))
         )
 
+    # TODO: consider default
     def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
         if initial is None:
             return reduce(func, list(self))
@@ -358,10 +411,11 @@ class ChainableIter[T](Iterable[T]):
         iter1: Iterable[T1],
         /,
         *,
-        fill_value: tp.Literal[ValueType.NA],
+        fill_value: tp.Literal[Default.NoDefault],
         strict: tp.Literal[False],
     ) -> ChainableIter[tuple[T, T1]]: ...
 
+    # NOTE: redundant??
     @tp.overload
     def zip2[T1](
         self,
@@ -379,7 +433,6 @@ class ChainableIter[T](Iterable[T]):
         /,
         *,
         fill_value: F,
-        strict: tp.Literal[False],
     ) -> ChainableIter[tuple[T | F, T1 | F]]: ...
 
     def zip2[T1, F](
@@ -387,11 +440,11 @@ class ChainableIter[T](Iterable[T]):
         iter1: Iterable[T1],
         /,
         *,
-        fill_value: F = ValueType.NA,
+        fill_value: F = Default.NoDefault,
         strict: bool = False,
     ) -> ChainableIter[tuple[T, T1]] | ChainableIter[tuple[T | F, T1 | F]]:
         itbl = it.zip_longest(self, iter1, fillvalue=fill_value)
-        if fill_value is ValueType.NA:
+        if fill_value is Default.NoDefault:
             itbl = zip(self, iter1, strict=strict)
         elif strict:
             raise ValueError("Cannot specify both fill_value and strict")
@@ -414,8 +467,7 @@ class ChainableIter[T](Iterable[T]):
         iter2: Iterable[T2],
         /,
         *,
-        fill_value: tp.Literal[ValueType.NA],
-        strict: tp.Literal[False],
+        fill_value: tp.Literal[Default.NoDefault],
     ) -> ChainableIter[tuple[T, T1, T2]]: ...
 
     @tp.overload
@@ -426,9 +478,9 @@ class ChainableIter[T](Iterable[T]):
         /,
         *,
         fill_value: F,
-        strict: tp.Literal[False],
     ) -> ChainableIter[tuple[T | F, T1 | F, T2 | F]]: ...
 
+    # NOTE: Redundant??
     @tp.overload
     def zip3[T1, T2](
         self,
@@ -446,11 +498,11 @@ class ChainableIter[T](Iterable[T]):
         iter2: Iterable[T2],
         /,
         *,
-        fill_value: F = ValueType.NA,
+        fill_value: F = Default.NoDefault,
         strict: bool = False,
     ) -> ChainableIter[tuple[T, T1, T2]] | ChainableIter[tuple[T | F, T1 | F, T2 | F]]:
         itbl = it.zip_longest(self, iter1, iter2, fillvalue=fill_value)
-        if fill_value is ValueType.NA:
+        if fill_value is Default.NoDefault:
             itbl = zip(self, iter1, iter2, strict=strict)
         elif strict:
             raise ValueError("Cannot specify both fill_value and strict")
@@ -468,18 +520,51 @@ class ChainableIter[T](Iterable[T]):
     ) -> ChainableIter[tuple[T, T1, T2, T3]]:
         return ChainableIter(zip(self, iter1, iter2, iter3, strict=strict))
 
-    def transpose(
-        self: ChainableIter[T],
+    def transpose_eager[TSized: Sized](
+        self: ChainableIter[TSized],
         strict: bool = False,
-    ) -> ChainableIter[T]:
-        return ChainableIter(zip(*self, strict=strict))
+    ) -> ChainableIter[TSized]:
+        return ChainableIter(zip(*self._iter, strict=strict))
+
+    def interleave[R](
+        self,
+        other: Iterable[R],
+        other_first: bool = False,
+    ) -> ChainableIter[T | R]:
+        ch = it.chain.from_iterable(
+            zip(other, self._iter) if other_first else zip(self._iter, other)
+        )
+        return ChainableIter(ch)
 
     @property
-    def stats(self: ChainableIter[TNumber]) -> stats[TNumber]:
+    def stats[TNumber: (float, Decimal, Fraction) = float](
+        self: ChainableIter[TNumber],
+    ) -> stats[TNumber]:
         return stats[TNumber](self)
 
     def map_type[R](self, type: type[R]) -> ChainableIter[R]:
         return self.map(type)
+
+    def prepend[V](self, *values: V) -> ChainableIter[T | V]:
+        return ChainableIter(it.chain(values, self))
+
+    def append[V](self, *values: V) -> ChainableIter[T | V]:
+        return ChainableIter(it.chain(self, values))
+
+    def flatten_once(self: ChainableIter[Iterable[T]]) -> ChainableIter[T]:
+        return ChainableIter(it.chain.from_iterable(self))
+
+    def flatten(self) -> ChainableIter[object]:
+        return ChainableIter(flatten(self))
+
+    def concat[R](
+        self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
+    ) -> ChainableIter[T | R]:
+        match self_position:
+            case "front":
+                return ChainableIter(it.chain(self._iter, *its))
+            case "back":
+                return ChainableIter(it.chain(*its, self._iter))
 
 
 if __name__ == "__main__":
@@ -495,8 +580,8 @@ if __name__ == "__main__":
         .map_type(float)
         .skip_take(skip=5, take=5)
         .batched(5)
-        .transpose()
-        .partial_map(sum, start=0.0)
+        .transpose_eager()
+        .map_partial(sum, start=0.0)
         .min()
     )
     print(ch1)
