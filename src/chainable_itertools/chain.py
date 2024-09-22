@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from fractions import Fraction
 import itertools as it
-from operator import attrgetter
+from operator import attrgetter, lt, gt
 from collections import deque
 import typing as tp
 from collections.abc import Callable, Iterable, Iterator, Sized
@@ -24,9 +24,78 @@ NoDefault: tp.Literal[Default.NoDefault] = Default.NoDefault
 Unavailable: tp.Literal[Default.Unavailable] = Default.Unavailable
 
 
-class Comparable[T](tp.Protocol):
-    def __lt__(self: T, other: T, /) -> bool: ...
-    def __gt__(self: T, other: T, /) -> bool: ...
+@tp.runtime_checkable
+class SupportsLT(tp.Protocol):
+    def __lt__(self, other: tp.Any, /) -> bool: ...  # pyright: ignore[reportAny]
+
+
+@tp.runtime_checkable
+class SupportsGT(tp.Protocol):
+    def __gt__(self, other: tp.Any, /) -> bool: ...  # pyright: ignore[reportAny]
+
+
+type Comparable = SupportsLT | SupportsGT
+
+
+def _lazy_minmax_keyed[T, R: Comparable](
+    iterator: Iterator[T], key: Callable[[T], R]
+) -> tuple[T, T]:
+    min = max = next(iterator)
+    for item in iterator:
+        k = key(item)
+        if lt(k, key(min)):
+            min = item
+        if gt(k, key(max)):
+            max = item
+    return min, max
+
+
+def _lazy_minmax[T: Comparable](iterator: Iterator[T]) -> tuple[T, T]:
+    min = max = next(iterator)
+    for item in iterator:
+        if lt(item, min):
+            min = item
+        if gt(item, max):
+            max = item
+    return min, max
+
+
+class Indexed[T](tp.NamedTuple):
+    idx: int
+    value: T
+
+    @tp.override
+    def __le__[TSupportsLT: SupportsLT](
+        self: Indexed[TSupportsLT], value: TSupportsLT, /
+    ) -> bool:
+        return (self.value < value) and (self.value == value)
+
+    @tp.override
+    def __lt__[TSupportsLT: SupportsLT](
+        self: Indexed[TSupportsLT], value: TSupportsLT, /
+    ) -> bool:
+        return self.value < value
+
+    @tp.override
+    def __gt__[TSupportsGT: SupportsGT](
+        self: Indexed[TSupportsGT], value: TSupportsGT, /
+    ) -> bool:
+        return self.value > value
+
+    @tp.override
+    def __ge__[TSupportsGT: SupportsGT](
+        self: Indexed[TSupportsGT], value: TSupportsGT, /
+    ) -> bool:
+        return (self.value > value) and (self.value == value)
+
+    @tp.override
+    def __eq__(self, value: object, /) -> bool:
+        return self.value == value
+
+
+class MinMax[T](tp.NamedTuple):
+    min: T
+    max: T
 
 
 # TODO: a better way to register modules
@@ -184,18 +253,18 @@ class ChainableIter[T](Iterable[T]):
     to_list = MethodKind[T].consumer(list)
 
     @tp.overload
-    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def max[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def max[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
-    def max[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def max[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = NoDefault,
@@ -210,20 +279,19 @@ class ChainableIter[T](Iterable[T]):
             case _:
                 return max(self, key=key, default=default)
 
-    # TODO: Add minmax
     @tp.overload
-    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def min[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def min[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
-    def min[TComparable: Comparable[tp.Any], RComparable: Comparable[tp.Any], F](
+    def min[TComparable: Comparable, RComparable: Comparable, F](
         self: ChainableIter[TComparable],
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
@@ -237,6 +305,90 @@ class ChainableIter[T](Iterable[T]):
                 return min(self, key=key)
             case _:
                 return min(self, key=key, default=default)
+
+    @tp.overload
+    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[Default.NoDefault] = Default.NoDefault,
+    ) -> MinMax[TComparable]: ...
+    @tp.overload
+    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> MinMax[TComparable] | MinMax[F]: ...
+    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+        self: ChainableIter[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> MinMax[TComparable] | MinMax[F]:
+        lst = list(self)
+        match (key, default):
+            case (None, Default.NoDefault):
+                return MinMax(min(lst), max(lst))
+            case (None, _):
+                m1, m2 = (
+                    min(lst, default=default),
+                    max(lst, default=default),
+                )
+                if not lst:
+                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
+                else:
+                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+            case (_, Default.NoDefault):
+                return MinMax(min(lst, key=key), max(lst, key=key))
+            case _:
+                m1, m2 = (
+                    min(lst, key=key, default=default),
+                    max(lst, key=key, default=default),
+                )
+                if not lst:
+                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
+                else:
+                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+
+    @tp.overload
+    def minmax_lazy[RComparable: Comparable](
+        self,
+        /,
+        *,
+        key: Callable[[T], RComparable],
+    ) -> MinMax[T]: ...
+    @tp.overload
+    def minmax_lazy[TComparable: Comparable](
+        self: ChainableIter[TComparable],
+        /,
+        *,
+        key: None = None,
+    ) -> MinMax[TComparable]: ...
+    @tp.overload
+    def minmax_lazy[RComparable: Comparable, F](
+        self,
+        /,
+        *,
+        key: Callable[[T], RComparable],
+        default: F,
+    ) -> MinMax[T] | MinMax[F]: ...
+    @tp.overload
+    def minmax_lazy[TComparable: Comparable, F](
+        self: ChainableIter[TComparable],
+        /,
+        *,
+        key: None = None,
+        default: F,
+    ) -> MinMax[TComparable] | MinMax[F]: ...
+    @tp.no_type_check
+    def minmax_lazy(self, /, *, default=Default.NoDefault, key=None):
+        try:
+            min, max = (
+                _lazy_minmax(self) if key is None else _lazy_minmax_keyed(self, key=key)
+            )
+            return MinMax(min, max)
+        except StopIteration:
+            if default is NoDefault:
+                raise
+            return MinMax(default, default)
 
     @tp.override
     def __iter__(self) -> Iterator[T]:
@@ -551,7 +703,7 @@ class ChainableIter[T](Iterable[T]):
     def append[V](self, *values: V) -> ChainableIter[T | V]:
         return ChainableIter(it.chain(self, values))
 
-    def flatten_once(self: ChainableIter[Iterable[T]]) -> ChainableIter[T]:
+    def flatten_once[T1](self: ChainableIter[tuple[T1, ...]]) -> ChainableIter[T1]:
         return ChainableIter(it.chain.from_iterable(self))
 
     def flatten(self) -> ChainableIter[object]:
@@ -566,6 +718,20 @@ class ChainableIter[T](Iterable[T]):
             case "back":
                 return ChainableIter(it.chain(*its, self._iter))
 
+    @tp.overload
+    def enumerate(self, indexed: tp.Literal[False]) -> ChainableIter[tuple[int, T]]: ...
+    @tp.overload
+    def enumerate(
+        self, indexed: tp.Literal[True] = True
+    ) -> ChainableIter[Indexed[T]]: ...
+    def enumerate(
+        self, indexed: bool = True
+    ) -> ChainableIter[tuple[int, T]] | ChainableIter[Indexed[T]]:
+        enumerated = ChainableIter(enumerate(self._iter))
+        if indexed:
+            return enumerated.starmap(Indexed)
+        return enumerated
+
 
 if __name__ == "__main__":
     ch = ChainableIter(range(1, 10)).skip_take(skip=2, take=3, take_first=True)
@@ -577,11 +743,14 @@ if __name__ == "__main__":
     ch1 = (
         ChainableIter(range(1, 100))
         .skip_take(skip=2, take=3, take_first=True)
-        .map_type(float)
+        .map(float)
         .skip_take(skip=5, take=5)
         .batched(5)
         .transpose_eager()
-        .map_partial(sum, start=0.0)
-        .min()
+        .flatten_once()
+        .enumerate()
+        .minmax_lazy()
     )
     print(ch1)
+    print(ch1.min.idx)
+    print(ch1.max.idx)
