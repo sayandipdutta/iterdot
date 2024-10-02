@@ -8,7 +8,7 @@ import statistics as st
 import typing as tp
 
 if tp.TYPE_CHECKING:
-    from .chain import Iter
+    from iterdot.chain import Iter
 
 
 # TODO: a better way to register modules

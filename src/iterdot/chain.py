@@ -1,3 +1,4 @@
+# pyright: reportImportCycles=false
 from __future__ import annotations
 
 from decimal import Decimal
@@ -10,9 +11,9 @@ from collections.abc import Callable, Iterable, Iterator, Sized
 import enum
 from functools import partial, reduce, wraps
 
-from iterdot.extensions import stats
 from iterdot.index import Indexed
 from iterdot.minmax import lazy_minmax_keyed, lazy_minmax, MinMax
+from iterdot.plugins.stats import stats
 from iterdot.typing import Comparable
 
 
