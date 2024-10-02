@@ -3,13 +3,17 @@ from __future__ import annotations
 from decimal import Decimal
 from fractions import Fraction
 import itertools as it
-from operator import attrgetter, lt, gt
+from operator import attrgetter
 from collections import deque
 import typing as tp
 from collections.abc import Callable, Iterable, Iterator, Sized
 import enum
 from functools import partial, reduce, wraps
-import statistics as st
+
+from iterdot.extensions import stats
+from iterdot.index import Indexed
+from iterdot.minmax import lazy_minmax_keyed, lazy_minmax, MinMax
+from iterdot.typing import Comparable
 
 
 class Default(enum.Enum):
@@ -22,115 +26,6 @@ class Default(enum.Enum):
 Exhausted: tp.Literal[Default.Exhausted] = Default.Exhausted
 NoDefault: tp.Literal[Default.NoDefault] = Default.NoDefault
 Unavailable: tp.Literal[Default.Unavailable] = Default.Unavailable
-
-
-@tp.runtime_checkable
-class SupportsLT(tp.Protocol):
-    def __lt__(self, other: tp.Any, /) -> bool: ...  # pyright: ignore[reportAny]
-
-
-@tp.runtime_checkable
-class SupportsGT(tp.Protocol):
-    def __gt__(self, other: tp.Any, /) -> bool: ...  # pyright: ignore[reportAny]
-
-
-type Comparable = SupportsLT | SupportsGT
-
-
-def _lazy_minmax_keyed[T, R: Comparable](
-    iterator: Iterator[T], key: Callable[[T], R]
-) -> tuple[T, T]:
-    min = max = next(iterator)
-    for item in iterator:
-        k = key(item)
-        if lt(k, key(min)):
-            min = item
-        if gt(k, key(max)):
-            max = item
-    return min, max
-
-
-def _lazy_minmax[T: Comparable](iterator: Iterator[T]) -> tuple[T, T]:
-    min = max = next(iterator)
-    for item in iterator:
-        if lt(item, min):
-            min = item
-        if gt(item, max):
-            max = item
-    return min, max
-
-
-class Indexed[T](tp.NamedTuple):
-    idx: int
-    value: T
-
-    @tp.override
-    def __le__[TSupportsLT: SupportsLT](
-        self: Indexed[TSupportsLT], value: TSupportsLT, /
-    ) -> bool:
-        return (self.value < value) and (self.value == value)
-
-    @tp.override
-    def __lt__[TSupportsLT: SupportsLT](
-        self: Indexed[TSupportsLT], value: TSupportsLT, /
-    ) -> bool:
-        return self.value < value
-
-    @tp.override
-    def __gt__[TSupportsGT: SupportsGT](
-        self: Indexed[TSupportsGT], value: TSupportsGT, /
-    ) -> bool:
-        return self.value > value
-
-    @tp.override
-    def __ge__[TSupportsGT: SupportsGT](
-        self: Indexed[TSupportsGT], value: TSupportsGT, /
-    ) -> bool:
-        return (self.value > value) and (self.value == value)
-
-    @tp.override
-    def __eq__(self, value: object, /) -> bool:
-        return self.value == value
-
-
-class MinMax[T](tp.NamedTuple):
-    min: T
-    max: T
-
-
-# TODO: a better way to register modules
-def _register_stats[R, **P, TNumber: (float, Decimal, Fraction) = float](
-    func: Callable[tp.Concatenate[Iterable[TNumber], P], R],
-) -> Callable[tp.Concatenate[stats[TNumber], P], R]:
-    @wraps(func)
-    def inner(
-        self: stats[TNumber],
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ) -> R:
-        return func(iter(self.iterable), *args, **kwargs)
-
-    return inner
-
-
-class stats[TNumber: (float, Decimal, Fraction) = float]:
-    def __init__(self, iterable: Iter[TNumber]):
-        self.iterable = iterable
-
-    fmean = _register_stats(st.fmean)
-    geometric_mean = _register_stats(st.geometric_mean)
-    harmonic_mean = _register_stats(st.harmonic_mean)
-    pstdev = _register_stats(st.pstdev)
-    pvariance = _register_stats(st.pvariance)
-    stdev = _register_stats(st.stdev)
-    variance = _register_stats(st.variance)
-    median = _register_stats(st.median)
-    median_low = _register_stats(st.median_low)
-    median_high = _register_stats(st.median_high)
-    median_grouped = _register_stats(st.median_grouped)
-    mode = _register_stats(st.mode)
-    multimode = _register_stats(st.multimode)
-    quantiles = _register_stats(st.quantiles)
 
 
 class MethodKind[T]:
@@ -230,6 +125,7 @@ class Iter[T](Iterable[T]):
     # TODO: add itemgetter
     # TODO: Replace type[K] with TypeForm (when available)
     def getattr[K](self, *names: str, type: type[K]) -> Iter[K]:
+        del type
         func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
         return self.map_partial(func)
 
@@ -376,7 +272,7 @@ class Iter[T](Iterable[T]):
     def minmax_lazy(self, /, *, default=Default.NoDefault, key=None):
         try:
             min, max = (
-                _lazy_minmax(self) if key is None else _lazy_minmax_keyed(self, key=key)
+                lazy_minmax(self) if key is None else lazy_minmax_keyed(self, key=key)
             )
             return MinMax(min, max)
         except StopIteration:

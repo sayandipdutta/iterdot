@@ -1,46 +1,37 @@
 from __future__ import annotations
+import typing as tp
 
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
-from enum import Enum
-from operator import attrgetter
-from typing import override
+from iterdot.typing import SupportsLT, SupportsGT
 
 
-class Step(int, Enum):
-    FORWARD = 1
-    BACKWARD = -1
-
-
-@dataclass(frozen=True, slots=True)
-class Indexed[T]:
-    index: int
+class Indexed[T](tp.NamedTuple):
+    idx: int
     value: T
 
+    @tp.override
+    def __le__[TSupportsLT: SupportsLT](
+        self: Indexed[TSupportsLT], value: TSupportsLT, /
+    ) -> bool:
+        return (self.value < value) and (self.value == value)
 
-@dataclass(eq=False, repr=False, match_args=False, slots=True)
-class IndexedIter[T](Iterable[T]):
-    iterable: Iterable[T] | IndexedIter[T]
-    current_index: int = field(default=-1, init=False)
+    @tp.override
+    def __lt__[TSupportsLT: SupportsLT](
+        self: Indexed[TSupportsLT], value: TSupportsLT, /
+    ) -> bool:
+        return self.value < value
 
-    @override
-    def __iter__(self) -> Iterator[Indexed[T]]:
-        if isinstance(self.iterable, IndexedIter):
-            for item in self.iterable:
-                self.current_index = item.index
-                yield item
-        else:
-            for i, item in enumerate(self.iterable):
-                self.current_index = i
-                yield Indexed(i, item)
+    @tp.override
+    def __gt__[TSupportsGT: SupportsGT](
+        self: Indexed[TSupportsGT], value: TSupportsGT, /
+    ) -> bool:
+        return self.value > value
 
-    def into_iter(self) -> IndexedIter[T]:
-        if isinstance(self.iterable, IndexedIter):
-            return self
-        return IndexedIter(self)
+    @tp.override
+    def __ge__[TSupportsGT: SupportsGT](
+        self: Indexed[TSupportsGT], value: TSupportsGT, /
+    ) -> bool:
+        return (self.value > value) and (self.value == value)
 
-    def values(self) -> Iterator[T]:
-        return map(attrgetter("value"), self)
-
-    def indices(self) -> Iterator[int]:
-        return map(attrgetter("index"), self)
+    @tp.override
+    def __eq__(self, value: object, /) -> bool:
+        return self.value == value

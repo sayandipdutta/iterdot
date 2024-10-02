@@ -2,7 +2,7 @@ from collections import deque
 from collections.abc import Iterable
 from operator import add
 from typing import Any, no_type_check
-from chainable_itertools.chain import Iter, Default
+from iterdot.chain import Iter, Default
 import itertools as itl
 import pytest
 
