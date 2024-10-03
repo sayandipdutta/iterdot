@@ -2,7 +2,7 @@ from collections.abc import Callable, Iterator
 from operator import lt, gt
 from typing import NamedTuple
 
-from iterdot.typing import Comparable
+from iterdot.wtyping import Comparable
 
 
 def lazy_minmax_keyed[T, R: Comparable](

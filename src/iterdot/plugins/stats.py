@@ -7,9 +7,6 @@ from functools import wraps
 import statistics as st
 import typing as tp
 
-if tp.TYPE_CHECKING:
-    from iterdot.chain import Iter
-
 
 # TODO: a better way to register modules
 def register_stats[R, **P, TNumber: (float, Decimal, Fraction) = float](
@@ -26,10 +23,21 @@ def register_stats[R, **P, TNumber: (float, Decimal, Fraction) = float](
     return inner
 
 
+class Stats[TNumber: (float, Decimal, Fraction) = float](tp.NamedTuple):
+    mean: TNumber
+    stdev: TNumber
+    median: TNumber
+    minimum: TNumber
+    maximum: TNumber
+    mode: TNumber
+    quantiles: tuple[TNumber, TNumber, TNumber]
+
+
 class stats[TNumber: (float, Decimal, Fraction) = float]:
-    def __init__(self, iterable: Iter[TNumber]):
+    def __init__(self, iterable: Iterable[TNumber]):
         self.iterable = iterable
 
+    mean = register_stats(st.mean)
     fmean = register_stats(st.fmean)
     geometric_mean = register_stats(st.geometric_mean)
     harmonic_mean = register_stats(st.harmonic_mean)
@@ -44,3 +52,17 @@ class stats[TNumber: (float, Decimal, Fraction) = float]:
     mode = register_stats(st.mode)
     multimode = register_stats(st.multimode)
     quantiles = register_stats(st.quantiles)
+
+    def __call__(self):
+        lst = list(self.iterable)
+        return Stats(
+            mean=st.mean(lst),
+            stdev=st.stdev(lst),
+            median=st.median(lst),
+            mode=st.mode(lst),
+            minimum=min(lst),
+            maximum=max(lst),
+            quantiles=tuple[TNumber, TNumber, TNumber](
+                st.quantiles(lst, n=4, method="inclusive")
+            ),
+        )

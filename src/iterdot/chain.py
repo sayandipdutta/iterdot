@@ -7,14 +7,14 @@ import itertools as it
 from operator import attrgetter
 from collections import deque
 import typing as tp
-from collections.abc import Callable, Iterable, Iterator, Sized
+from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 import enum
 from functools import partial, reduce, wraps
 
 from iterdot.index import Indexed
 from iterdot.minmax import lazy_minmax_keyed, lazy_minmax, MinMax
 from iterdot.plugins.stats import stats
-from iterdot.typing import Comparable
+from iterdot.wtyping import Comparable
 
 
 class Default(enum.Enum):
@@ -79,7 +79,7 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
         yield item
 
 
-class Iter[T](Iterable[T]):
+class Iter[T](Iterator[T]):
     def __init__(self, iterable: Iterable[T]) -> None:
         self.iterable = iterable
         self._iter = (
@@ -273,8 +273,10 @@ class Iter[T](Iterable[T]):
     def minmax_lazy(self, /, *, default=Default.NoDefault, key=None):
         try:
             min, max = (
-                lazy_minmax(self) if key is None else lazy_minmax_keyed(self, key=key)
-            )
+                lazy_minmax(self)
+                if key is None
+                else lazy_minmax_keyed(self, key=key)
+            )  # fmt: skip
             return MinMax(min, max)
         except StopIteration:
             if default is NoDefault:
@@ -610,24 +612,465 @@ class Iter[T](Iterable[T]):
         return enumerated
 
 
+class Tuple[T](Sequence[T]):
+    def __init__(self, iterable: Iterable[T]) -> None:
+        self.iterable = iterable if isinstance(iterable, tuple) else tuple(iterable)
+
+    compress = MethodKind[T].augmentor(it.compress)
+    pairwise = MethodKind[T].augmentor(it.pairwise)
+    batched = MethodKind[T].augmentor(it.batched)
+    accumulate = MethodKind[T].augmentor(it.accumulate)
+    slice = MethodKind[T].augmentor(it.islice)
+    zip_with = MethodKind[T].augmentor(zip)
+
+    takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
+    dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
+
+    sum = MethodKind[T].consumer(sum)
+    to_list = MethodKind[T].consumer(list)
+
+    @tp.overload
+    def max[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[Default.NoDefault] = NoDefault,
+    ) -> TComparable: ...
+    @tp.overload
+    def max[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = NoDefault,
+    ) -> TComparable | F: ...
+    def max[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = NoDefault,
+    ) -> TComparable | F:
+        match (key, default):
+            case (None, Default.NoDefault):
+                return max(self)
+            case (None, _):
+                return max(self, default=default)
+            case (_, Default.NoDefault):
+                return max(self, key=key)
+            case _:
+                return max(self, key=key, default=default)
+
+    @tp.overload
+    def min[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[Default.NoDefault] = Default.NoDefault,
+    ) -> TComparable: ...
+    @tp.overload
+    def min[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> TComparable | F: ...
+    def min[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> TComparable | F:
+        match (key, default):
+            case (None, Default.NoDefault):
+                return min(self)
+            case (None, _):
+                return min(self, default=default)
+            case (_, Default.NoDefault):
+                return min(self, key=key)
+            case _:
+                return min(self, key=key, default=default)
+
+    @tp.overload
+    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: tp.Literal[Default.NoDefault] = Default.NoDefault,
+    ) -> MinMax[TComparable]: ...
+    @tp.overload
+    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> MinMax[TComparable] | MinMax[F]: ...
+    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+        self: Tuple[TComparable],
+        key: Callable[[TComparable], RComparable] | None = None,
+        default: F = Default.NoDefault,
+    ) -> MinMax[TComparable] | MinMax[F]:
+        lst = list(self)
+        match (key, default):
+            case (None, Default.NoDefault):
+                return MinMax(min(lst), max(lst))
+            case (None, _):
+                m1, m2 = (
+                    min(lst, default=default),
+                    max(lst, default=default),
+                )
+                if not lst:
+                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
+                else:
+                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+            case (_, Default.NoDefault):
+                return MinMax(min(lst, key=key), max(lst, key=key))
+            case _:
+                m1, m2 = (
+                    min(lst, key=key, default=default),
+                    max(lst, key=key, default=default),
+                )
+                if not lst:
+                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
+                else:
+                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+
+    def iter(self) -> Iter[T]:
+        return Iter(self.iterable)
+
+    def map_partial[R, **P](
+        self,
+        func: Callable[tp.Concatenate[T, P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> Tuple[R]:
+        return Tuple(func(item, *args, **kwargs) for item in self)
+
+    @tp.overload
+    def map[K, R](
+        self,
+        func: Callable[[T], R],
+    ) -> Tuple[R]: ...
+    @tp.overload
+    def map[K, _, R, **P](
+        self,
+        func: Callable[tp.Concatenate[T, _, ...], R],
+        *args: Iterable[K],
+    ) -> Tuple[R]: ...
+    def map[K, R](
+        self,
+        func: Callable[tp.Concatenate[T, ...], R],
+        *args: Iterable[K],
+    ) -> Tuple[R]:
+        return Tuple(map(func, self, *args))
+
+    def feed_into[R, **P](
+        self,
+        func: Callable[tp.Concatenate[Iterable[T], P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        return func(self, *args, **kwargs)
+
+    def filter(
+        self, predicate: Callable[[T], bool] | None, *, when: bool = True
+    ) -> Tuple[T]:
+        if when:
+            return Tuple(filter(predicate, self.iterable))
+        else:
+            return Tuple(it.filterfalse(predicate, self.iterable))
+
+    def starmap[*Ts, R](self: Tuple[tuple[*Ts]], func: Callable[[*Ts], R]) -> Tuple[R]:
+        return Tuple(it.starmap(func, self))
+
+    @tp.overload
+    def first[TDefault](
+        self, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def first[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        return self[0] if default is NoDefault else default
+
+    # TODO: support getitem
+    @tp.overload
+    def at[TDefault](
+        self, n: int, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def at[TDefault](self, n: int, default: TDefault) -> T | TDefault: ...
+    def at[TDefault](self, n: int, default: TDefault = Exhausted) -> T | TDefault:
+        try:
+            return self[n]
+        except IndexError:
+            if default is NoDefault:
+                raise
+            return default
+
+    @tp.overload
+    def last[TDefault](
+        self, default: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> T: ...
+    @tp.overload
+    def last[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        return self[-1] if default is NoDefault else default
+
+    def tail(self, n: int) -> Tuple[T]:
+        return Tuple(self[-n:])
+
+    def skip(self, n: int) -> Tuple[T]:
+        return Tuple(self[n:])
+
+    def foreach(self, func: Callable[[T], None]) -> None:
+        self.iter().map(func).exhaust()
+
+    @staticmethod
+    def _get_skip_take_selectors(
+        s1: tuple[bool, int], s2: tuple[bool, int]
+    ) -> Iterator[bool]:
+        while True:
+            yield from it.repeat(*s1)
+            yield from it.repeat(*s2)
+
+    # TODO: explore if take_first can be emulated with
+    # order of arguments, i.e. by looking at the order
+    # of **kwargs, where **kwargs: TypedDict[skip: int, take: int]
+    # also check if signature can be overloaded
+    # if not, explore decorator approach to patch `take_first`
+    # argument based on order of kw args.
+    def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> Tuple[T]:
+        if take_first:
+            selectors = self._get_skip_take_selectors((True, take), (False, skip))
+        else:
+            selectors = self._get_skip_take_selectors((False, skip), (True, take))
+        return Tuple(self.compress(selectors))
+
+    @tp.overload
+    def chain_from_iter[K1](
+        self: Tuple[Iterable[K1]], iterable: None = None
+    ) -> Tuple[K1]: ...
+
+    @tp.overload
+    def chain_from_iter[K2](
+        self, iterable: Iterable[Iterable[K2]]
+    ) -> Tuple[T | K2]: ...
+
+    def chain_from_iter[K1, K2](
+        self: tp.Self | Tuple[Iterable[K1]],
+        iterable: Iterable[Iterable[K2]] | None = None,
+    ) -> Tuple[K1] | Tuple[T | K2]:
+        if iterable is None:
+            return Tuple(it.chain.from_iterable(tp.cast(Tuple[Iterable[K1]], self)))
+        return Tuple(
+            it.chain(tp.cast(Tuple[T], self), it.chain.from_iterable(iterable))
+        )
+
+    # TODO: consider default
+    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
+        if initial is None:
+            return reduce(func, self)
+        return reduce(func, self, initial)
+
+    @tp.overload
+    def zip2[T1](
+        self,
+        iter1: Iterable[T1],
+        /,
+        *,
+        strict: bool,
+    ) -> Tuple[tuple[T, T1]]: ...
+
+    @tp.overload
+    def zip2[T1](
+        self,
+        iter1: Iterable[T1],
+        /,
+        *,
+        fill_value: tp.Literal[Default.NoDefault],
+        strict: tp.Literal[False],
+    ) -> Tuple[tuple[T, T1]]: ...
+
+    # NOTE: redundant??
+    @tp.overload
+    def zip2[T1](
+        self,
+        iter1: Iterable[T1],
+        /,
+        *,
+        fill_value: object,
+        strict: tp.Literal[True],
+    ) -> tp.Never: ...
+
+    @tp.overload
+    def zip2[T1, F](
+        self,
+        iter1: Iterable[T1],
+        /,
+        *,
+        fill_value: F,
+    ) -> Tuple[tuple[T | F, T1 | F]]: ...
+
+    def zip2[T1, F](
+        self,
+        iter1: Iterable[T1],
+        /,
+        *,
+        fill_value: F = Default.NoDefault,
+        strict: bool = False,
+    ) -> Tuple[tuple[T, T1]] | Tuple[tuple[T | F, T1 | F]]:
+        itbl = it.zip_longest(self, iter1, fillvalue=fill_value)
+        if fill_value is Default.NoDefault:
+            itbl = zip(self, iter1, strict=strict)
+        elif strict:
+            raise ValueError("Cannot specify both fill_value and strict")
+        return Tuple(itbl)
+
+    @tp.overload
+    def zip3[T1, T2](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        /,
+        *,
+        strict: bool,
+    ) -> Tuple[tuple[T, T1, T2]]: ...
+
+    @tp.overload
+    def zip3[T1, T2](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        /,
+        *,
+        fill_value: tp.Literal[Default.NoDefault],
+    ) -> Tuple[tuple[T, T1, T2]]: ...
+
+    @tp.overload
+    def zip3[T1, T2, F](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        /,
+        *,
+        fill_value: F,
+    ) -> Tuple[tuple[T | F, T1 | F, T2 | F]]: ...
+
+    # NOTE: Redundant??
+    @tp.overload
+    def zip3[T1, T2](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        /,
+        *,
+        fill_value: object,
+        strict: tp.Literal[True],
+    ) -> tp.Never: ...
+
+    def zip3[T1, T2, F](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        /,
+        *,
+        fill_value: F = Default.NoDefault,
+        strict: bool = False,
+    ) -> Tuple[tuple[T, T1, T2]] | Tuple[tuple[T | F, T1 | F, T2 | F]]:
+        itbl = it.zip_longest(self, iter1, iter2, fillvalue=fill_value)
+        if fill_value is Default.NoDefault:
+            itbl = zip(self, iter1, iter2, strict=strict)
+        elif strict:
+            raise ValueError("Cannot specify both fill_value and strict")
+        return Tuple(itbl)
+
+    # TODO: overload zip4
+    def zip4[T1, T2, T3](
+        self,
+        iter1: Iterable[T1],
+        iter2: Iterable[T2],
+        iter3: Iterable[T3],
+        /,
+        *,
+        strict: bool = False,
+    ) -> Tuple[tuple[T, T1, T2, T3]]:
+        return Tuple(zip(self, iter1, iter2, iter3, strict=strict))
+
+    def transpose_eager[TSized: Sized](
+        self: Tuple[TSized],
+        strict: bool = False,
+    ) -> Tuple[TSized]:
+        return Tuple(zip(*self, strict=strict))
+
+    def interleave[R](
+        self,
+        other: Iterable[R],
+        other_first: bool = False,
+    ) -> Tuple[T | R]:
+        ch = it.chain.from_iterable(
+            zip(other, self) if other_first else zip(self, other)
+        )
+        return Tuple(ch)
+
+    @property
+    def stats[TNumber: (float, Decimal, Fraction) = float](
+        self: Tuple[TNumber],
+    ) -> stats[TNumber]:
+        return stats[TNumber](self)
+
+    def map_type[R](self, type: type[R]) -> Tuple[R]:
+        return self.map(type)
+
+    def prepend[V](self, *values: V) -> Tuple[T | V]:
+        return Tuple(values + self.iterable)
+
+    def append[V](self, *values: V) -> Tuple[T | V]:
+        return Tuple(self.iterable + values)
+
+    def flatten_once[T1](self: Tuple[tuple[T1, ...]]) -> Tuple[T1]:
+        return Tuple(reduce(sum, self, ()))
+
+    def flatten(self) -> Tuple[object]:
+        return Tuple(flatten(self))
+
+    def concat[R](
+        self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
+    ) -> Tuple[T | R]:
+        match self_position:
+            case "front":
+                return Tuple(it.chain(self.iterable, *its))
+            case "back":
+                return Tuple(it.chain(*its, self.iterable))
+
+    @tp.overload
+    def enumerate(self, indexed: tp.Literal[False]) -> Tuple[tuple[int, T]]: ...
+    @tp.overload
+    def enumerate(self, indexed: tp.Literal[True] = True) -> Tuple[Indexed[T]]: ...
+    def enumerate(
+        self, indexed: bool = True
+    ) -> Tuple[tuple[int, T]] | Tuple[Indexed[T]]:
+        enumerated = Tuple(enumerate(self))
+        if indexed:
+            return enumerated.starmap(Indexed)
+        return enumerated
+
+
 if __name__ == "__main__":
-    ch = Iter(range(1, 10)).skip_take(skip=2, take=3, take_first=True)
-    ch.exhaust()
-    print(ch.last_yielded_value)
-    print(ch.last_yielded_index)
-    print(ch.peek_next_index())
-    print(ch.peek_next_value())
-    ch1 = (
-        Iter(range(1, 100))
-        .skip_take(skip=2, take=3, take_first=True)
-        .map(float)
-        .skip_take(skip=5, take=5)
-        .batched(5)
-        .transpose_eager()
-        .flatten_once()
-        .enumerate()
-        .minmax_lazy()
-    )
-    print(ch1)
-    print(ch1.min.idx)
-    print(ch1.max.idx)
+    from pathlib import Path
+
+    dummy_file = Path("./dummy.config").resolve()
+    with dummy_file.open() as fh:
+        config = (
+            Iter(fh)
+            .map(str.strip)
+            .filter(None)
+            .map_partial(str.split, sep=" = ", maxsplit=1)
+            .feed_into(dict)
+        )
+
+        _ = fh.seek(0)
+        keys, vals = (
+            Iter(fh)
+            .map(str.strip)
+            .filter(None)
+            .map_partial(str.split, sep=" = ", maxsplit=1)
+            .transpose_eager(strict=True)
+        )
+
+    print(f"{config = }", f"{keys = }", f"{vals = }", sep="\n")
+
+    player_scores = [12, 55, 89, 82, 37, 16]
+    minimum, maximum = Iter(player_scores).filter(lambda x: x > 35).minmax_lazy()
+
+    statistics = Iter(player_scores).filter(lambda x: x > 35).stats()
+    print(statistics)
