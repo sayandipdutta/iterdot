@@ -12,7 +12,7 @@ class Indexed[T](tp.NamedTuple):
     def __le__[TSupportsLT: SupportsLT](
         self: Indexed[TSupportsLT], value: TSupportsLT, /
     ) -> bool:
-        return (self.value < value) and (self.value == value)
+        return (self.value < value) or (self.value == value)
 
     @tp.override
     def __lt__[TSupportsLT: SupportsLT](
@@ -30,7 +30,7 @@ class Indexed[T](tp.NamedTuple):
     def __ge__[TSupportsGT: SupportsGT](
         self: Indexed[TSupportsGT], value: TSupportsGT, /
     ) -> bool:
-        return (self.value > value) and (self.value == value)
+        return (self.value > value) or (self.value == value)
 
     @tp.override
     def __eq__(self, value: object, /) -> bool:
