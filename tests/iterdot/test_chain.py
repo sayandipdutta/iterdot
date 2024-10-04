@@ -242,7 +242,7 @@ def test_first():
     assert Iter(()).first() is Default.Exhausted
     assert Iter(()).first(0) == 0
     with pytest.raises(StopIteration):
-        _ = Iter(()).first(default=Default.NoDefault)
+        Iter(()).first(default=Default.NoDefault)
 
 
 def test_at():
@@ -258,7 +258,7 @@ def test_last():
     assert Iter(()).last() is Default.Exhausted
     assert Iter(()).last(0) == 0
     with pytest.raises(StopIteration):
-        _ = Iter(()).last(default=Default.NoDefault)
+        Iter(()).last(default=Default.NoDefault)
 
 
 def test_tail():
