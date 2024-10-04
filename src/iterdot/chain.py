@@ -186,12 +186,29 @@ class Iter[T](Iterator[T]):
 
     # NOTE: consider if it should error
     @tp.overload
-    def next_value[TDefault](
+    def next[TDefault](
         self, default: tp.Literal[Default.NoDefault] = NoDefault
     ) -> T: ...
     @tp.overload
-    def next_value[TDefault](self, default: TDefault) -> T | TDefault: ...
-    def next_value[TDefault](self, default: TDefault = NoDefault) -> T | TDefault:
+    def next[TDefault](self, default: TDefault) -> T | TDefault: ...
+    def next[TDefault](self, default: TDefault = NoDefault) -> T | TDefault:
+        """next value in the iterator.
+
+        Example:
+            >>> itbl = Iter([1, 2, 3, 4])
+            >>> itbl.next()
+            1
+            >>> itbl.next()
+            2
+            >>> itbl.next()
+            3
+            >>> itbl.next()
+            4
+            >>> itbl.next(default=-1)
+            -1
+            >>> itbl.next()
+            <Default.NoDefault: 2>
+        """
         return next(self) if default is NoDefault else next(self, default)
 
     # TODO: add itemgetter
@@ -202,19 +219,30 @@ class Iter[T](Iterator[T]):
         return self.map_partial(func)
 
     compress = MethodKind[T].augmentor(it.compress)
+    """see itertools.compress"""
     pairwise = MethodKind[T].augmentor(it.pairwise)
+    """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
+    """see itertools.batched"""
     accumulate = MethodKind[T].augmentor(it.accumulate)
+    """see itertools.accumulate"""
     slice = MethodKind[T].augmentor(it.islice)
+    """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
+    """see zip"""
 
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
+    """see itertools.takewhile"""
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
+    """see itertools.dropwhile"""
 
     sum = MethodKind[T].consumer(sum)
+    """see sum"""
     to_list = MethodKind[T].consumer(list)
+    """convert to list"""
 
     def load_in_memory(self) -> SeqIter[T]:
+        """convert to SeqIter"""
         return SeqIter(self)
 
     @tp.overload
@@ -234,6 +262,27 @@ class Iter[T](Iterator[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
+        """calculate the max element in the iterable.
+
+        Args:
+            key (optional):
+                A function that should be applied on each element
+                the result of the function is used for comparison (default: None)
+
+            default (optional):
+                default value to return if iterable is empty
+                if default is omitted, or default is Default.NoDefault
+                a ValueError is raised if the iterable is empty.
+
+        Returns:
+            TComparable | F: Either the max element, or default.
+
+        Example:
+            >>> Iter([3, 4, 1, 9]).max()
+            9
+            >>> Iter([]).max(default=-1)
+            -1
+        """
         match (key, default):
             case (None, Default.NoDefault):
                 return max(self)
@@ -261,6 +310,21 @@ class Iter[T](Iterator[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
+        """calculate the min element in the iterable.
+
+        Args:
+            key (optional):
+                A function that should be applied on each element
+                the result of the function is used for comparison (default: None)
+
+            default (optional):
+                default value to return if iterable is empty
+                if default is omitted, or default is Default.NoDefault
+                a ValueError is raised if the iterable is empty.
+
+        Returns:
+            TComparable | F: Either the min element, or default.
+        """
         match (key, default):
             case (None, Default.NoDefault):
                 return min(self)
@@ -288,6 +352,21 @@ class Iter[T](Iterator[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
+        """Eagerly calculate min and max by loading the entire iterator in memory.
+
+        Args:
+            key (optional):
+                A function that should be applied on each element
+                the result of the function is used for comparison (default: None)
+
+            default (optional):
+                default value to return if iterable is empty
+                if default is omitted, or default is Default.NoDefault
+                a ValueError is raised if the iterable is empty.
+
+        Returns:
+            MinMax: A NamedTuple containing (min, max)
+        """
         lst = list(self)
         match (key, default):
             case (None, Default.NoDefault):
@@ -430,7 +509,7 @@ class Iter[T](Iterator[T]):
     @tp.overload
     def at[TDefault](self, n: int, default: TDefault = Exhausted) -> T | TDefault: ...
     def at[TDefault](self, n: int, default: TDefault = Exhausted) -> T | TDefault:
-        return self.skip(n).next_value(default)
+        return self.skip(n).next(default)
 
     @tp.overload
     def last[TDefault](self, default: tp.Literal[Default.NoDefault]) -> T: ...
