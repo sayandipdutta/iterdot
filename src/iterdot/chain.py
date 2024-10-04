@@ -19,6 +19,8 @@ from iterdot.wtyping import Comparable
 
 
 class Default(enum.Enum):
+    """Sentinel values used as defaults."""
+
     Exhausted = enum.auto()
     NoDefault = enum.auto()
     Unavailable = enum.auto()
@@ -81,6 +83,13 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
 
 
 class Iter[T](Iterator[T]):
+    """
+    Iterator over a given iterable, providing method chaining.
+
+    Args:
+        iterable: an iterable that is to be turned into an Iter
+    """
+
     def __init__(self, iterable: Iterable[T]) -> None:
         self.iterable = iterable
         self._iter = (
@@ -90,6 +99,19 @@ class Iter[T](Iterator[T]):
         self._last_yielded_index: int = -1
 
     def peek_next_index(self) -> int:
+        """Peek the next index that would be yielded, if there is element left to yield.
+
+        Example:
+            >>> itbl = Iter([1, 2, 3, 4])
+            >>> itbl.peek_next_index()
+            0
+            >>> itbl.peek_next_index()
+            0
+            >>> _ = itbl.skip(1).next_value(); itbl.peek_next_index()
+            2
+            >>> itbl.exhaust(); itbl.peek_next_index()
+            4
+        """
         return self._last_yielded_index + 1
 
     @tp.overload
@@ -98,20 +120,68 @@ class Iter[T](Iterator[T]):
     ) -> T | tp.Literal[Default.Exhausted]: ...
     @tp.overload
     def peek_next_value[TDefault](self, default: TDefault) -> T | TDefault: ...
+    @tp.no_type_check
     def peek_next_value[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        """Peek the next value that would be yielded, if there is element left to yield.
+        Otherwise, return default.
+
+        Example:
+            >>> itbl = Iter([1, 2, 3, 4])
+            >>> itbl.peek_next_value()
+            1
+            >>> itbl.peek_next_value()
+            1
+            >>> _ = itbl.skip(1).next_value(); itbl.peek_next_value()
+            3
+            >>> itbl.exhaust(); itbl.peek_next_value()
+            <Default.Exhausted: 1>
+            >>> itbl.exhaust(); itbl.peek_next_value(-1)
+            -1
+        """
         item = default
-        for item in self:
+        for item in self._iter:
             self._iter = prepend(item, to=self._iter)
-            self._last_yielded_index -= 1
             break
         return item
 
     @property
     def last_yielded_value(self) -> T | tp.Literal[Default.Unavailable]:
+        """Return the value that was last yielded, if not yielded at least once,
+        return Default.Unavailable.
+
+        Example:
+            >>> itbl = Iter([1, 2, 3, 4])
+            >>> itbl.last_yielded_value
+            <Default.Unavailable: 3>
+            >>> itbl.peek_next_value()
+            1
+            >>> itbl.last_yielded_value
+            <Default.Unavailable: 3>
+            >>> _ = itbl.skip(1).next_value(); itbl.last_yielded_value
+            2
+            >>> itbl.exhaust(); itbl.last_yielded_value
+            4
+        """
         return self._last_yielded_value
 
     @property
     def last_yielded_index(self) -> int:
+        """Return the index of the value that was last yielded,
+        if not yielded at least once, return -1.
+
+        Example:
+            >>> itbl = Iter([1, 2, 3, 4])
+            >>> itbl.last_yielded_index
+            -1
+            >>> itbl.peek_next_value()
+            1
+            >>> itbl.last_yielded_index
+            -1
+            >>> _ = itbl.skip(1).next_value(); itbl.last_yielded_index
+            1
+            >>> itbl.exhaust(); itbl.last_yielded_index
+            3
+        """
         return self._last_yielded_index
 
     # NOTE: consider if it should error
@@ -922,6 +992,7 @@ class SeqIter[T](Sequence[T]):
 
 
 if __name__ == "__main__":
+    from doctest import testmod
     from pathlib import Path
 
     dummy_file = Path("./dummy.config").resolve()
@@ -950,3 +1021,5 @@ if __name__ == "__main__":
     print(f"Winner => player_id: {minmax_info.max.idx}, score: {minmax_info.max.value}")
     print(f"Loser  => player_id: {minmax_info.min.idx}, score: {minmax_info.min.value}")
     print(f"Player Stats: {statistics}")
+
+    _ = testmod()

@@ -1,4 +1,4 @@
 __pycache__
 .python-version
-.env
+.env*
 pyrightconfig.json
