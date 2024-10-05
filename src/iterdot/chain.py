@@ -218,7 +218,7 @@ class Iter[T](Iterator[T]):
     def getattr[K](self, *names: str, type: type[K]) -> Iter[K]:
         del type
         func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
-        return self.map_partial(func)
+        return self.map(func)
 
     compress = MethodKind[T].augmentor(it.compress)
     """see itertools.compress"""
