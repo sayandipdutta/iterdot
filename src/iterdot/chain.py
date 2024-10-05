@@ -1329,15 +1329,16 @@ class SeqIter[T](Sequence[T]):
     def concat[R](
         self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
     ) -> SeqIter[T | R]:
+        if self_position not in ["front", "back"]:
+            raise ValueError(
+                f'`self_position` must be "front" or "back", got {self_position!r}'
+            )
+
         match self_position:
             case "front":
                 return SeqIter(it.chain(self.iterable, *its))
             case "back":
                 return SeqIter(it.chain(*its, self.iterable))
-            case _:  # pyright: ignore[reportUnnecessaryComparison]
-                raise ValueError(  # pyright: ignore[reportUnreachable]
-                    f'Expected `self_position` to be one of "front", "back", got {self_position}'
-                )
 
 
 if __name__ == "__main__":
