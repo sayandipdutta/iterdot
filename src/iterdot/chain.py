@@ -92,7 +92,7 @@ class Iter[T](Iterator[T]):
 
     def __init__(self, iterable: Iterable[T]) -> None:
         self.iterable = iterable
-        self._iter = (
+        self._iter: Iterator[T] = (
             iter(iterable) if not isinstance(iterable, Iter) else iterable._iter
         )
         self._last_yielded_value: T | tp.Literal[Default.Unavailable] = Unavailable
@@ -107,7 +107,7 @@ class Iter[T](Iterator[T]):
             0
             >>> itbl.peek_next_index()
             0
-            >>> _ = itbl.skip(1).next_value(); itbl.peek_next_index()
+            >>> _ = itbl.skip(1).next(); itbl.peek_next_index()
             2
             >>> itbl.exhaust(); itbl.peek_next_index()
             4
@@ -131,7 +131,7 @@ class Iter[T](Iterator[T]):
             1
             >>> itbl.peek_next_value()
             1
-            >>> _ = itbl.skip(1).next_value(); itbl.peek_next_value()
+            >>> _ = itbl.skip(1).next(); itbl.peek_next_value()
             3
             >>> itbl.exhaust(); itbl.peek_next_value()
             <Default.Exhausted: 1>
@@ -157,7 +157,7 @@ class Iter[T](Iterator[T]):
             1
             >>> itbl.last_yielded_value
             <Default.Unavailable: 3>
-            >>> _ = itbl.skip(1).next_value(); itbl.last_yielded_value
+            >>> _ = itbl.skip(1).next(); itbl.last_yielded_value
             2
             >>> itbl.exhaust(); itbl.last_yielded_value
             4
@@ -177,7 +177,7 @@ class Iter[T](Iterator[T]):
             1
             >>> itbl.last_yielded_index
             -1
-            >>> _ = itbl.skip(1).next_value(); itbl.last_yielded_index
+            >>> _ = itbl.skip(1).next(); itbl.last_yielded_index
             1
             >>> itbl.exhaust(); itbl.last_yielded_index
             3
@@ -207,7 +207,9 @@ class Iter[T](Iterator[T]):
             >>> itbl.next(default=-1)
             -1
             >>> itbl.next()
-            <Default.NoDefault: 2>
+            Traceback (most recent call last):
+                ...
+            StopIteration
         """
         return next(self) if default is NoDefault else next(self, default)
 
@@ -277,11 +279,19 @@ class Iter[T](Iterator[T]):
         Returns:
             TComparable | F: Either the max element, or default.
 
+        Raises:
+            ValueError: If no default is given (similar to default==Default.NoDefault)
+                and iterable is empty.
+
         Example:
             >>> Iter([3, 4, 1, 9]).max()
             9
             >>> Iter([]).max(default=-1)
             -1
+            >>> Iter([]).max()
+            Traceback (most recent call last):
+                ...
+            ValueError: max() iterable argument is empty
         """
         match (key, default):
             case (None, Default.NoDefault):
@@ -324,6 +334,20 @@ class Iter[T](Iterator[T]):
 
         Returns:
             TComparable | F: Either the min element, or default.
+
+        Raises:
+            ValueError: If no default is given (similar to default==Default.NoDefault)
+                and iterable is empty.
+
+        Example:
+            >>> Iter([3, 4, 1, 9]).min()
+            1
+            >>> Iter([]).min(default=-1)
+            -1
+            >>> Iter([]).min()
+            Traceback (most recent call last):
+                ...
+            ValueError: min() iterable argument is empty
         """
         match (key, default):
             case (None, Default.NoDefault):
@@ -366,10 +390,24 @@ class Iter[T](Iterator[T]):
 
         Returns:
             MinMax: A NamedTuple containing (min, max)
+
+        Raises:
+            ValueError: If no default is given (similar to default==Default.NoDefault)
+                and iterable is empty.
+
+        Example:
+            >>> Iter([1, 9, 6, 2]).minmax_eager()
+            MinMax(min=1, max=9)
+            >>> Iter([]).minmax_eager()
+            Traceback (most recent call last):
+                ...
+            ValueError: minmax() iterable argument is empty
         """
         lst = list(self)
         match (key, default):
             case (None, Default.NoDefault):
+                if not lst:
+                    raise ValueError("minmax() iterable argument is empty")
                 return MinMax(min(lst), max(lst))
             case (None, _):
                 m1, m2 = (
@@ -424,6 +462,33 @@ class Iter[T](Iterator[T]):
     ) -> MinMax[TComparable] | MinMax[F]: ...
     @tp.no_type_check
     def minmax_lazy(self, /, *, default=Default.NoDefault, key=None):
+        """Lazily calculate min and max processing one item at a time.
+
+        Args:
+            key (optional):
+                A function that should be applied on each element
+                the result of the function is used for comparison (default: None)
+
+            default (optional):
+                default value to return if iterable is empty
+                if default is omitted, or default is Default.NoDefault
+                a ValueError is raised if the iterable is empty.
+
+        Returns:
+            MinMax: A NamedTuple containing (min, max)
+
+        Raises:
+            ValueError: If no default is given (similar to default==Default.NoDefault)
+                and iterable is empty.
+
+        Example:
+            >>> Iter([1, 9, 6, 2]).minmax_lazy()
+            MinMax(min=1, max=9)
+            >>> Iter([]).minmax_lazy()
+            Traceback (most recent call last):
+                ...
+            ValueError: minmax() iterable argument is empty
+        """
         try:
             min, max = (
                 lazy_minmax(self)
@@ -433,7 +498,7 @@ class Iter[T](Iterator[T]):
             return MinMax(min, max)
         except StopIteration:
             if default is NoDefault:
-                raise
+                raise ValueError("minmax() iterable argument is empty")
             return MinMax(default, default)
 
     @tp.override
@@ -455,6 +520,23 @@ class Iter[T](Iterator[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> Iter[R]:
+        """
+        map a function with partial arguments on each element of self.
+
+        Equivalent to calling `Iter(map(partial(func, *args, **kwargs), self))`
+
+        Args:
+            func: callable to be applied whose first argument is items in self
+            *args: other positional arguments for func
+            **kwargs: keyward arguments for func
+
+        Returns:
+            Iter[R]: Iter after mapping
+
+        Example:
+            >>> Iter(["0", "1", "10", "11"]).map_partial(int, base=2).to_list()
+            [0, 1, 2, 3]
+        """
         f = partial(func, *args, **kwargs)
         itr = iter(map(f, self))
         return Iter(itr)
@@ -475,6 +557,23 @@ class Iter[T](Iterator[T]):
         func: Callable[tp.Concatenate[T, ...], R],
         *args: Iterable[K],
     ) -> Iter[R]:
+        """
+        map a function on each element of self.
+
+        Equivalent to calling `Iter(map(func, self, *args), self))`
+        For more info on syntax, see python builtin `map`.
+
+        Args:
+            func: callable to be applied whose first argument is items in self
+            *args: iterables of other arguments (if any) that the func takes.
+
+        Returns:
+            Iter[R]: Iter after mapping
+
+        Example:
+            >>> Iter(["0", "1", "10", "11"]).map(int).to_list()
+            [0, 1, 10, 11]
+        """
         return Iter(map(func, self, *args))
 
     def feed_into[R, **P](
@@ -483,17 +582,61 @@ class Iter[T](Iterator[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> R:
+        """
+        Apply a function which takes the whole of self as its first argument.
+
+        Args:
+            func: A callable which takes the whole of self as its first argument.
+            *args: Other positional arguments to the function if any.
+            **kwargs: Keywork arguments to the function if any.
+
+        Returns:
+            R: return value of `func`.
+
+        Example:
+            >>> Iter([("a", 0), ("b", 1)]).feed_into(dict)
+            {'a': 0, 'b': 1}
+            >>> Iter([1, 2, 3, 4]).sum(start=10)
+            20
+        """
         return func(self, *args, **kwargs)
 
     def filter(
         self, predicate: Callable[[T], bool] | None, *, when: bool = True
     ) -> Iter[T]:
+        """
+        Filter self based on predicate.
+
+        Args:
+            predicate: A callable that returns bool, or None.
+                If predicate is None, it is equivalent to passing bool as predicate.
+            when (optional): if True, return elements for which predicate was True,
+                otherwise, return elements for which predicate was False.
+                default: True.
+
+        Returns:
+            Iter: elements which satisfy the predicate.
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0).to_list()
+            [2, 4]
+            >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0, when=False).to_list()
+            [1, 3]
+        """
         if when:
             return Iter(filter(predicate, self._iter))
         else:
             return Iter(it.filterfalse(predicate, self._iter))
 
     def starmap[*Ts, R](self: Iter[tuple[*Ts]], func: Callable[[*Ts], R]) -> Iter[R]:
+        """
+        see itertools.starmap
+
+        Example:
+            >>> from operator import add
+            >>> Iter([(0, 1), (10, 20)]).starmap(add).to_list()
+            [1, 30]
+        """
         return Iter(it.starmap(func, self._iter))
 
     @tp.overload
@@ -501,6 +644,30 @@ class Iter[T](Iterator[T]):
     @tp.overload
     def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault: ...
     def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        """
+        Return the first item of self, or default if Iterable is empty.
+
+        Args:
+            default (optional): Return default if default is not empty, and iterable is empty.
+                If default == NoDefault, ValueError is raised if iterable is empty.
+                default: Default.Exhausted
+
+        Returns:
+            T | TDefault: first item in self, or default.
+
+        Raises:
+            StopIteration: if default == Default.NoDefault and iterable is empty
+
+        Example:
+            >>> Iter([0, 1, 2, 3]).first()
+            0
+            >>> Iter([]).first()
+            <Default.Exhausted: 1>
+            >>> Iter([]).first(default=Default.NoDefault)
+            Traceback (most recent call last):
+                ...
+            StopIteration
+        """
         return next(self) if default is NoDefault else next(self, default)
 
     # TODO: support getitem
@@ -516,6 +683,30 @@ class Iter[T](Iterator[T]):
     @tp.overload
     def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault: ...
     def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        """
+        Return the last item of self, or default if Iterable is empty.
+
+        Args:
+            default (optional): Return default if default is not empty, and iterable is empty.
+                If default == NoDefault, ValueError is raised if iterable is empty.
+                default: Default.Exhausted
+
+        Returns:
+            T | TDefault: last item in self, or default.
+
+        Raises:
+            StopIteration: if default == Default.NoDefault and iterable is empty
+
+        Example:
+            >>> Iter([0, 1, 2, 3]).last()
+            3
+            >>> Iter([]).last()
+            <Default.Exhausted: 1>
+            >>> Iter([]).last(default=Default.NoDefault)
+            Traceback (most recent call last):
+                ...
+            StopIteration: Underlying iterable is empty
+        """
         try:
             return deque(self, maxlen=1).popleft()
         except IndexError:
@@ -524,16 +715,95 @@ class Iter[T](Iterator[T]):
             return default
 
     def tail(self, n: int) -> Iter[T]:
+        """
+        Return n items from end if available, or return all available items.
+
+        Args:
+            n: number of items to return from end.
+
+        Returns:
+            Iter: Iter containing at most n elements from last.
+
+        Example:
+            >>> Iter([0, 1, 2, 3]).tail(2).to_list()
+            [2, 3]
+            >>> Iter([0, 1, 2, 3]).tail(5).to_list()
+            [0, 1, 2, 3]
+        """
         return Iter(deque(self, maxlen=n))
 
+    def head(self, n: int) -> Iter[T]:
+        """
+        Return n items from beginning if available, or return all available items.
+
+        Args:
+            n: number of items to return from beginning.
+
+        Returns:
+            Iter: Iter containing at most n elements from beginning.
+
+        Example:
+            >>> Iter([0, 1, 2, 3]).head(2).to_list()
+            [0, 1]
+            >>> Iter([0, 1, 2, 3]).head(5).to_list()
+            [0, 1, 2, 3]
+        """
+        return self.slice(n)
+
     def skip(self, n: int) -> Iter[T]:
+        """Advance the iterator n positions.
+
+        Args:
+            n: number of positions to skip
+
+        Returns:
+            Iter: Iter advanced n positions.
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).skip(2).to_list()
+            [3, 4]
+        """
         return self if not n else self.slice(n, None)
 
     def exhaust(self) -> None:
+        """Exhaust all items in self. Could be used for side-effects.
+
+        See Also:
+            Iter.foreach
+
+        Returns:
+            None
+
+        Example:
+            >>> it = Iter([1, 2, 3, 4])
+            >>> it.exhaust()
+            >>> it.next(default=Default.Exhausted)
+            <Default.Exhausted: 1>
+            >>> Iter([1, 2, 3, 4]).map(print).exhaust()
+            1
+            2
+            3
+            4
+        """
         out = deque(self, maxlen=0)
         del out
 
     def foreach[R](self, func: Callable[[T], None]) -> None:
+        """map func on each item of self, and exhaust.
+
+        See Also:
+            Iter.exhaust
+
+        Returns:
+            None
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).foreach(print)
+            1
+            2
+            3
+            4
+        """
         self.map(func).exhaust()
 
     @staticmethod
