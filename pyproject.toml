@@ -21,3 +21,4 @@ dev-dependencies = [
 
 [tool.basedpyright]
 venvPath = "."
+pythonVersion = "3.13"
