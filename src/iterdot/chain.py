@@ -9,7 +9,7 @@ from collections import deque
 import typing as tp
 from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 import enum
-from functools import partial, reduce, wraps
+from functools import reduce, wraps
 from pprint import pformat
 
 from iterdot.index import Indexed
