@@ -1,13 +1,27 @@
 from collections.abc import Callable, Iterator
+from functools import cached_property
 from operator import lt, gt
-from typing import NamedTuple
+from typing import NamedTuple, Protocol, Self
 
 from iterdot.wtyping import Comparable
 
 
+class SupportsSub(Protocol):
+    def __sub__(self, other: Self) -> Self: ...
+
+
+class MinMax[T](NamedTuple):
+    min: T
+    max: T
+
+    @cached_property
+    def ptp[TSupportsSub: SupportsSub](self: "MinMax[TSupportsSub]") -> TSupportsSub:
+        return self.max - self.min
+
+
 def lazy_minmax_keyed[T, R: Comparable](
     iterator: Iterator[T], key: Callable[[T], R]
-) -> tuple[T, T]:
+) -> MinMax[T]:
     min = max = next(iterator)
     for item in iterator:
         k = key(item)
@@ -15,19 +29,14 @@ def lazy_minmax_keyed[T, R: Comparable](
             min = item
         if gt(k, key(max)):
             max = item
-    return min, max
+    return MinMax(min, max)
 
 
-def lazy_minmax[T: Comparable](iterator: Iterator[T]) -> tuple[T, T]:
+def lazy_minmax[T: Comparable](iterator: Iterator[T]) -> MinMax[T]:
     min = max = next(iterator)
     for item in iterator:
         if lt(item, min):
             min = item
         if gt(item, max):
             max = item
-    return min, max
-
-
-class MinMax[T](NamedTuple):
-    min: T
-    max: T
+    return MinMax(min, max)

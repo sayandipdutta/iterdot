@@ -60,12 +60,12 @@ def test_peek_next_value(integers_from_0_to_1000: list[int]):
     assert it.peek_next_value() == Default.Exhausted
 
 
-def test_next_value(integers_from_0_to_1000: list[int]):
+def test_next(integers_from_0_to_1000: list[int]):
     it = Iter(integers_from_0_to_1000)
-    assert it.next_value() == 0
+    assert it.next() == 0
 
     _ = next(it)
-    assert it.next_value() == 2
+    assert it.next() == 2
 
     # after the last 3 calls, iterator has advanced three positions
     # so: it ==> 3 4 5 ... 1000
@@ -82,11 +82,11 @@ def test_next_value(integers_from_0_to_1000: list[int]):
     # consume upto 2
     consume(iter(normal_it.__next__, 2))
     consume(itl.islice(normal_it, 5, 150, 5))
-    assert it.next_value() == next(normal_it)
+    assert it.next() == next(normal_it)
 
     consume(it)
     with pytest.raises(StopIteration):
-        _ = it.next_value()
+        _ = it.next()
 
 
 def test_getattr(integers_from_0_to_1000: list[int]):

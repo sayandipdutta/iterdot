@@ -293,15 +293,11 @@ class Iter[T](Iterator[T]):
                 ...
             ValueError: max() iterable argument is empty
         """
-        match (key, default):
-            case (None, Default.NoDefault):
-                return max(self)
-            case (None, _):
-                return max(self, default=default)
-            case (_, Default.NoDefault):
-                return max(self, key=key)
-            case _:
-                return max(self, key=key, default=default)
+        return (
+            max(self, key=key)
+            if default is Default.NoDefault
+            else max(self, key=key, default=default)
+        )
 
     @tp.overload
     def min[TComparable: Comparable, RComparable: Comparable, F](
@@ -349,15 +345,11 @@ class Iter[T](Iterator[T]):
                 ...
             ValueError: min() iterable argument is empty
         """
-        match (key, default):
-            case (None, Default.NoDefault):
-                return min(self)
-            case (None, _):
-                return min(self, default=default)
-            case (_, Default.NoDefault):
-                return min(self, key=key)
-            case _:
-                return min(self, key=key, default=default)
+        return (
+            min(self, key=key)
+            if default is Default.NoDefault
+            else min(self, key=key, default=default)
+        )
 
     @tp.overload
     def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
@@ -403,32 +395,13 @@ class Iter[T](Iterator[T]):
                 ...
             ValueError: minmax() iterable argument is empty
         """
-        lst = list(self)
-        match (key, default):
-            case (None, Default.NoDefault):
-                if not lst:
-                    raise ValueError("minmax() iterable argument is empty")
-                return MinMax(min(lst), max(lst))
-            case (None, _):
-                m1, m2 = (
-                    min(lst, default=default),
-                    max(lst, default=default),
-                )
-                if not lst:
-                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
-                else:
-                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
-            case (_, Default.NoDefault):
-                return MinMax(min(lst, key=key), max(lst, key=key))
-            case _:
-                m1, m2 = (
-                    min(lst, key=key, default=default),
-                    max(lst, key=key, default=default),
-                )
-                if not lst:
-                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
-                else:
-                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+        match (tuple(self), default):
+            case (), Default.NoDefault:
+                raise ValueError("minmax() iterable argument is empty")
+            case (), default:
+                return MinMax(default, default)
+            case tup, _:
+                return MinMax(min(tup, key=key), max(tup, key=key))
 
     @tp.overload
     def minmax_lazy[RComparable: Comparable](
@@ -490,12 +463,11 @@ class Iter[T](Iterator[T]):
             ValueError: minmax() iterable argument is empty
         """
         try:
-            min, max = (
+            return (
                 lazy_minmax(self)
                 if key is None
                 else lazy_minmax_keyed(self, key=key)
             )  # fmt: skip
-            return MinMax(min, max)
         except StopIteration:
             if default is NoDefault:
                 raise ValueError("minmax() iterable argument is empty")
@@ -528,7 +500,7 @@ class Iter[T](Iterator[T]):
         Args:
             func: callable to be applied whose first argument is items in self
             *args: other positional arguments for func
-            **kwargs: keyward arguments for func
+            **kwargs: keyword arguments for func
 
         Returns:
             Iter[R]: Iter after mapping
@@ -1059,11 +1031,11 @@ class SeqIter[T](Sequence[T]):
     def __getitem__(self, index: slice) -> SeqIter[T]: ...
     @tp.override
     def __getitem__(self, index: int | slice) -> T | SeqIter[T]:
-        match index:
-            case int(val):
-                return self.iterable[val]
-            case _:
-                return SeqIter(self.iterable[index])
+        return (
+            self.iterable[index]
+            if isinstance(index, int)
+            else SeqIter(self.iterable[index])
+        )
 
     @tp.override
     def __len__(self) -> int:
@@ -1113,15 +1085,11 @@ class SeqIter[T](Sequence[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
-        match (key, default):
-            case (None, Default.NoDefault):
-                return max(self)
-            case (None, _):
-                return max(self, default=default)
-            case (_, Default.NoDefault):
-                return max(self, key=key)
-            case _:
-                return max(self, key=key, default=default)
+        return (
+            max(self, key=key)
+            if default is Default.NoDefault
+            else max(self, key=key, default=default)
+        )
 
     @tp.overload
     def min[TComparable: Comparable, RComparable: Comparable, F](
@@ -1140,15 +1108,11 @@ class SeqIter[T](Sequence[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
-        match (key, default):
-            case (None, Default.NoDefault):
-                return min(self)
-            case (None, _):
-                return min(self, default=default)
-            case (_, Default.NoDefault):
-                return min(self, key=key)
-            case _:
-                return min(self, key=key, default=default)
+        return (
+            min(self, key=key)
+            if default is Default.NoDefault
+            else min(self, key=key, default=default)
+        )
 
     @tp.overload
     def minmax[TComparable: Comparable, RComparable: Comparable, F](
@@ -1167,25 +1131,13 @@ class SeqIter[T](Sequence[T]):
         key: Callable[[TComparable], RComparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
-        lst = list(self)
-        match (key, default):
-            case (None, Default.NoDefault):
-                return MinMax(min(lst), max(lst))
-            case (None, _):
-                m1, m2 = min(lst, default=default), max(lst, default=default)
-                if not lst:
-                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
-                else:
-                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
-            case (_, Default.NoDefault):
-                return MinMax(min(lst, key=key), max(lst, key=key))
-            case _:
-                m1 = min(lst, key=key, default=default)
-                m2 = max(lst, key=key, default=default)
-                if not lst:
-                    return MinMax(tp.cast(F, m1), tp.cast(F, m2))
-                else:
-                    return MinMax(tp.cast(TComparable, m1), tp.cast(TComparable, m2))
+        match self.iterable, default:
+            case (), Default.NoDefault:
+                raise ValueError("minmax() iterable argument is empty")
+            case (), default:
+                return MinMax(default, default)
+            case tup, _:
+                return MinMax(min(tup, key=key), max(tup, key=key))
 
     def iter(self) -> Iter[T]:
         return Iter(self.iterable)
@@ -1225,12 +1177,13 @@ class SeqIter[T](Sequence[T]):
         return func(self, *args, **kwargs)
 
     def filter(
-        self, predicate: Callable[[T], bool] | None, *, when: bool = True
+        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
     ) -> SeqIter[T]:
-        if when:
-            return SeqIter(filter(predicate, self.iterable))
-        else:
-            return SeqIter(it.filterfalse(predicate, self.iterable))
+        return (
+            SeqIter(it.filterfalse(predicate, self.iterable))
+            if invert
+            else SeqIter(filter(predicate, self.iterable))
+        )
 
     def starmap[*Ts, R](
         self: SeqIter[tuple[*Ts]], func: Callable[[*Ts], R]
@@ -1348,9 +1301,9 @@ if __name__ == "__main__":
     dummy_file = Path("./dummy.config").resolve()
 
     # fmt: off
-    with dummy_file.open() as fh:
+    with dummy_file.open() as file_handle:
         key_val_tuples = (
-            Iter(fh)
+            Iter(file_handle)
             .map(str.strip)
             .filter(None)
             .map_partial(str.split, sep=" = ", maxsplit=1)
@@ -1360,8 +1313,13 @@ if __name__ == "__main__":
         config = key_val_tuples.feed_into(dict)
         keys, vals = key_val_tuples.transpose()
 
+
     player_scores = [12, 55, 89, 82, 37, 16]
-    qualified = Iter(player_scores).filter(lambda x: x > 35).load_in_memory()
+    qualified = (
+        Iter(player_scores)
+        .filter(lambda x: x > 35)
+        .load_in_memory()
+    )
 
     minmax_info = qualified.enumerate().minmax()
     statistics = qualified.stats()
