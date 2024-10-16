@@ -509,9 +509,7 @@ class Iter[T](Iterator[T]):
             >>> Iter(["0", "1", "10", "11"]).map_partial(int, base=2).to_list()
             [0, 1, 2, 3]
         """
-        f = partial(func, *args, **kwargs)
-        itr = iter(map(f, self))
-        return Iter(itr)
+        return Iter(func(item, *args, **kwargs) for item in self)
 
     @tp.overload
     def map[K, R](
@@ -1151,12 +1149,12 @@ class SeqIter[T](Sequence[T]):
         return SeqIter(func(item, *args, **kwargs) for item in self)
 
     @tp.overload
-    def map[K, R](
+    def map[R](
         self,
         func: Callable[[T], R],
     ) -> SeqIter[R]: ...
     @tp.overload
-    def map[K, _, R, **P](
+    def map[K, _, R](
         self,
         func: Callable[tp.Concatenate[T, _, ...], R],
         *args: Iterable[K],
