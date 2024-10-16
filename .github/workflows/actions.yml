@@ -46,7 +46,7 @@ jobs:
           src: "./src"
 
       - name: Type Check
-        uses: jakebailey/pyright-action@v2
+        run: uv run basedpyright
 
       - name: Test with pytest
         run: uv run pytest -vvv -xs

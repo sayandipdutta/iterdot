@@ -18,3 +18,6 @@ dev-dependencies = [
   "pytest>=8.3.3",
   "pyright>=1.1.383",
 ]
+
+[tool.basedpyright]
+venvPath = "."
