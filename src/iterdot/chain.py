@@ -9,7 +9,7 @@ from collections import deque
 import typing as tp
 from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 import enum
-from functools import partial, reduce, wraps
+from functools import reduce, wraps
 from pprint import pformat
 
 from iterdot.index import Indexed
@@ -77,7 +77,7 @@ def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
 
 def flatten(iterable: Iterable[object]) -> Iterable[object]:
     for item in iterable:
-        if isinstance(item, Iterable):
+        if isinstance(item, Iterable) and not isinstance(item, str):
             yield from flatten(tp.cast(Iterable[object], item))
         yield item
 
@@ -572,7 +572,7 @@ class Iter[T](Iterator[T]):
         return func(self, *args, **kwargs)
 
     def filter(
-        self, predicate: Callable[[T], bool] | None, *, when: bool = True
+        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
     ) -> Iter[T]:
         """
         Filter self based on predicate.
@@ -580,9 +580,9 @@ class Iter[T](Iterator[T]):
         Args:
             predicate: A callable that returns bool, or None.
                 If predicate is None, it is equivalent to passing bool as predicate.
-            when (optional): if True, return elements for which predicate was True,
+            invert (optional): if True, return elements for which predicate was True,
                 otherwise, return elements for which predicate was False.
-                default: True.
+                default: False.
 
         Returns:
             Iter: elements which satisfy the predicate.
@@ -590,13 +590,14 @@ class Iter[T](Iterator[T]):
         Example:
             >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0).to_list()
             [2, 4]
-            >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0, when=False).to_list()
+            >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0, invert=True).to_list()
             [1, 3]
         """
-        if when:
-            return Iter(filter(predicate, self._iter))
-        else:
-            return Iter(it.filterfalse(predicate, self._iter))
+        return (
+            Iter(it.filterfalse(predicate, self._iter))
+            if invert
+            else Iter(filter(predicate, self._iter))
+        )
 
     def starmap[*Ts, R](self: Iter[tuple[*Ts]], func: Callable[[*Ts], R]) -> Iter[R]:
         """
@@ -619,7 +620,7 @@ class Iter[T](Iterator[T]):
 
         Args:
             default (optional): Return default if default is not empty, and iterable is empty.
-                If default == NoDefault, ValueError is raised if iterable is empty.
+                If default == Default.NoDefault, ValueError is raised if iterable is empty.
                 default: Default.Exhausted
 
         Returns:
@@ -755,8 +756,7 @@ class Iter[T](Iterator[T]):
             3
             4
         """
-        out = deque(self, maxlen=0)
-        del out
+        deque[T](maxlen=0).extend(self)
 
     def foreach[R](self, func: Callable[[T], None]) -> None:
         """map func on each item of self, and exhaust.
