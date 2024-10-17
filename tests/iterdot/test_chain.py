@@ -225,7 +225,7 @@ def test_feed_into():
 
 def test_filter():
     assert Iter(range(5)).filter(lambda x: x < 2).to_list() == [0, 1]
-    assert Iter(range(5)).filter(lambda x: x >= 2, when=False).to_list() == [0, 1]
+    assert Iter(range(5)).filter(lambda x: x >= 2, invert=True).to_list() == [0, 1]
 
 
 def test_starmap():
