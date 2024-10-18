@@ -1,10 +1,12 @@
+import itertools as itl
 from collections import deque
 from collections.abc import Iterable
 from operator import add
 from typing import Any, no_type_check
-from iterdot.chain import Iter, Default
-import itertools as itl
+
 import pytest
+
+from iterdot.chain import Default, Iter
 
 
 def consume(iterable: Iterable[Any]):
@@ -115,7 +117,7 @@ def test_batched():
     rng = range(5)
     assert Iter(rng).batched(2).to_list() == list(itl.batched(rng, 2))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="incomplete batch"):
         _ = list(itl.batched(rng, 2, strict=True))
 
 
@@ -130,28 +132,27 @@ def test_slice(integers_from_0_to_1000: list[int]):
     assert Iter(integers_from_0_to_1000).slice(2).to_list() == [0, 1]
     assert Iter(integers_from_0_to_1000).slice(2, 5).to_list() == [2, 3, 4]
     assert (
-        Iter(integers_from_0_to_1000).slice(0, None).to_list()
-        == integers_from_0_to_1000
+        Iter(integers_from_0_to_1000).slice(0, None).to_list() == integers_from_0_to_1000
     )
     assert Iter(integers_from_0_to_1000).slice(0, None, 100).to_list() == list(
         range(0, 1001, 100)
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(-1).to_list()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(0, -1).to_list()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(0, 5, -1).to_list()
 
 
 def test_zip_with():
     assert Iter(range(5)).zip_with(range(5, 10)).to_list() == list(
-        zip(range(5), range(5, 10))
+        zip(range(5), range(5, 10), strict=False)
     )
     assert Iter(range(4)).zip_with(range(5, 10)).to_list() == list(
-        zip(range(4), range(5, 10))
+        zip(range(4), range(5, 10), strict=False)
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="shorter|longer"):
         _ = Iter(range(4)).zip_with(range(5, 10), strict=True).to_list()
 
 
@@ -175,7 +176,7 @@ def test_max():
     assert Iter(range(-5, -1)).max(default=10) == -2
     assert Iter(range(-5, -1)).max(key=abs, default=10) == -5
     assert Iter(()).max(key=abs, default=10) == 10
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="empty"):
         _ = Iter(()).max()
 
 
@@ -185,7 +186,7 @@ def test_min():
     assert Iter(range(-5, -1)).min(default=10) == -5
     assert Iter(range(-5, -1)).min(key=abs, default=10) == -2
     assert Iter(()).min(key=abs, default=10) == 10
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="empty"):
         _ = Iter(()).min()
 
 

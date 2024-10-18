@@ -1,6 +1,6 @@
 from collections.abc import Callable, Iterator
 from functools import cached_property
-from operator import lt, gt
+from operator import gt, lt
 from typing import NamedTuple, Protocol, Self
 
 from iterdot.wtyping import Comparable
