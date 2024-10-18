@@ -24,4 +24,3 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-        args: [--line-length=90, --preview]
