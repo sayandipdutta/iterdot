@@ -1,19 +1,19 @@
 # pyright: reportImportCycles=false
 from __future__ import annotations
 
+import enum
+import itertools as it
+import typing as tp
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from decimal import Decimal
 from fractions import Fraction
-import itertools as it
-from operator import attrgetter
-from collections import deque
-import typing as tp
-from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
-import enum
 from functools import reduce, wraps
+from operator import attrgetter
 from pprint import pformat
 
 from iterdot.index import Indexed
-from iterdot.minmax import lazy_minmax_keyed, lazy_minmax, MinMax
+from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.plugins.stats import stats
 from iterdot.wtyping import Comparable
 
@@ -55,9 +55,7 @@ class MethodKind[T]:
 
     @staticmethod
     def predicated_augmentor[**P, R](
-        func: Callable[
-            tp.Concatenate[Callable[[T], bool], Iterable[T], P], Iterable[R]
-        ],
+        func: Callable[tp.Concatenate[Callable[[T], bool], Iterable[T], P], Iterable[R]],
     ) -> Callable[tp.Concatenate[Iter[T], Callable[[T], bool], P], Iter[R]]:
         @wraps(func)
         def inner(
@@ -101,6 +99,9 @@ class Iter[T](Iterator[T]):
     def peek_next_index(self) -> int:
         """Peek the next index that would be yielded, if there is element left to yield.
 
+        Returns:
+            int: last yielded index
+
         Example:
             >>> itbl = Iter([1, 2, 3, 4])
             >>> itbl.peek_next_index()
@@ -124,6 +125,9 @@ class Iter[T](Iterator[T]):
     def peek_next_value[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
         """Peek the next value that would be yielded, if there is element left to yield.
         Otherwise, return default.
+
+        Returns:
+            next value to be yielded or default
 
         Example:
             >>> itbl = Iter([1, 2, 3, 4])
@@ -186,13 +190,14 @@ class Iter[T](Iterator[T]):
 
     # NOTE: consider if it should error
     @tp.overload
-    def next[TDefault](
-        self, default: tp.Literal[Default.NoDefault] = NoDefault
-    ) -> T: ...
+    def next[TDefault](self, default: tp.Literal[Default.NoDefault] = NoDefault) -> T: ...
     @tp.overload
     def next[TDefault](self, default: TDefault) -> T | TDefault: ...
     def next[TDefault](self, default: TDefault = NoDefault) -> T | TDefault:
         """next value in the iterator.
+
+        Returns:
+            next value or default
 
         Example:
             >>> itbl = Iter([1, 2, 3, 4])
@@ -244,7 +249,11 @@ class Iter[T](Iterator[T]):
     """convert to list"""
 
     def load_in_memory(self) -> SeqIter[T]:
-        """convert to SeqIter"""
+        """convert to SeqIter
+
+        Returns:
+            SeqIter
+        """
         return SeqIter(self)
 
     @tp.overload
@@ -293,11 +302,14 @@ class Iter[T](Iterator[T]):
                 ...
             ValueError: max() iterable argument is empty
         """
-        return (
-            max(self, key=key)
-            if default is Default.NoDefault
-            else max(self, key=key, default=default)
-        )
+        try:
+            return (
+                max(self, key=key)
+                if default is Default.NoDefault
+                else max(self, key=key, default=default)
+            )
+        except ValueError:
+            raise ValueError("max() iterable argument is empty") from None
 
     @tp.overload
     def min[TComparable: Comparable, RComparable: Comparable, F](
@@ -345,11 +357,14 @@ class Iter[T](Iterator[T]):
                 ...
             ValueError: min() iterable argument is empty
         """
-        return (
-            min(self, key=key)
-            if default is Default.NoDefault
-            else min(self, key=key, default=default)
-        )
+        try:
+            return (
+                min(self, key=key)
+                if default is Default.NoDefault
+                else min(self, key=key, default=default)
+            )
+        except ValueError:
+            raise ValueError("min() iterable argument is empty") from None
 
     @tp.overload
     def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
@@ -470,7 +485,7 @@ class Iter[T](Iterator[T]):
             )  # fmt: skip
         except StopIteration:
             if default is NoDefault:
-                raise ValueError("minmax() iterable argument is empty")
+                raise ValueError("minmax() iterable argument is empty") from None
             return MinMax(default, default)
 
     @tp.override
@@ -603,6 +618,9 @@ class Iter[T](Iterator[T]):
         """
         see itertools.starmap
 
+        Returns:
+            Iter
+
         Example:
             >>> from operator import add
             >>> Iter([(0, 1), (10, 20)]).starmap(add).to_list()
@@ -639,7 +657,10 @@ class Iter[T](Iterator[T]):
                 ...
             StopIteration
         """
-        return next(self) if default is NoDefault else next(self, default)
+        try:
+            return next(self) if default is NoDefault else next(self, default)
+        except StopIteration:
+            raise StopIteration from None
 
     # TODO: support getitem
     @tp.overload
@@ -682,7 +703,7 @@ class Iter[T](Iterator[T]):
             return deque(self, maxlen=1).popleft()
         except IndexError:
             if default is NoDefault:
-                raise StopIteration("Underlying iterable is empty")
+                raise StopIteration("Underlying iterable is empty") from None
             return default
 
     def tail(self, n: int) -> Iter[T]:
@@ -742,9 +763,6 @@ class Iter[T](Iterator[T]):
         See Also:
             Iter.foreach
 
-        Returns:
-            None
-
         Example:
             >>> it = Iter([1, 2, 3, 4])
             >>> it.exhaust()
@@ -763,9 +781,6 @@ class Iter[T](Iterator[T]):
 
         See Also:
             Iter.exhaust
-
-        Returns:
-            None
 
         Example:
             >>> Iter([1, 2, 3, 4]).foreach(print)
@@ -945,6 +960,7 @@ class Iter[T](Iterator[T]):
 
     def transpose_eager[TSized: Sized](
         self: Iter[TSized],
+        *,
         strict: bool = False,
     ) -> Iter[TSized]:
         return Iter(zip(*self._iter, strict=strict))
@@ -952,10 +968,13 @@ class Iter[T](Iterator[T]):
     def interleave[R](
         self,
         other: Iterable[R],
+        *,
         other_first: bool = False,
     ) -> Iter[T | R]:
         ch = it.chain.from_iterable(
-            zip(other, self._iter) if other_first else zip(self._iter, other)
+            zip(other, self._iter, strict=False)
+            if other_first
+            else zip(self._iter, other, strict=False)
         )
         return Iter(ch)
 
@@ -991,14 +1010,14 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def enumerate(
-        self, indexed: tp.Literal[False], start: int = 0
+        self, *, indexed: tp.Literal[False], start: int = 0
     ) -> Iter[tuple[int, T]]: ...
     @tp.overload
     def enumerate(
-        self, indexed: tp.Literal[True] = True, start: int = 0
+        self, *, indexed: tp.Literal[True] = True, start: int = 0
     ) -> Iter[Indexed[T]]: ...
     def enumerate(
-        self, indexed: bool = True, start: int = 0
+        self, *, indexed: bool = True, start: int = 0
     ) -> Iter[tuple[int, T]] | Iter[Indexed[T]]:
         enumerated = Iter(enumerate(self._iter, start=start))
         if indexed:
@@ -1009,9 +1028,7 @@ class Iter[T](Iterator[T]):
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T]) -> None:
         if not isinstance(iterable, SeqIter):
-            self._iterable = (
-                iterable if isinstance(iterable, tuple) else tuple(iterable)
-            )
+            self._iterable = iterable if isinstance(iterable, tuple) else tuple(iterable)
         else:
             self._iterable = iterable.iterable
 
@@ -1052,14 +1069,14 @@ class SeqIter[T](Sequence[T]):
 
     @tp.overload
     def enumerate(
-        self, indexed: tp.Literal[False], start: int = 0
+        self, *, indexed: tp.Literal[False], start: int = 0
     ) -> SeqIter[tuple[int, T]]: ...
     @tp.overload
     def enumerate(
-        self, indexed: tp.Literal[True] = True, start: int = 0
+        self, *, indexed: tp.Literal[True] = True, start: int = 0
     ) -> SeqIter[Indexed[T]]: ...
     def enumerate(
-        self, indexed: bool = True, start: int = 0
+        self, *, indexed: bool = True, start: int = 0
     ) -> SeqIter[tuple[int, T]] | SeqIter[Indexed[T]]:
         enumerated = SeqIter(enumerate(self.iterable, start=start))
         if indexed:
@@ -1213,9 +1230,7 @@ class SeqIter[T](Sequence[T]):
             return default
 
     @tp.overload
-    def last[TDefault](
-        self, default: tp.Literal[Default.NoDefault] = NoDefault
-    ) -> T: ...
+    def last[TDefault](self, default: tp.Literal[Default.NoDefault] = NoDefault) -> T: ...
     @tp.overload
     def last[TDefault](self, default: TDefault) -> T | TDefault: ...
     def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
@@ -1244,9 +1259,7 @@ class SeqIter[T](Sequence[T]):
     # also check if signature can be overloaded
     # if not, explore decorator approach to patch `take_first`
     # argument based on order of kw args.
-    def skip_take(
-        self, *, skip: int, take: int, take_first: bool = False
-    ) -> SeqIter[T]:
+    def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> SeqIter[T]:
         if take_first:
             selectors = self._get_skip_take_selectors((True, take), (False, skip))
         else:
@@ -1261,6 +1274,7 @@ class SeqIter[T](Sequence[T]):
 
     def transpose[TSized: Sized](
         self: SeqIter[TSized],
+        *,
         strict: bool = False,
     ) -> SeqIter[TSized]:
         return SeqIter(zip(*self, strict=strict))
@@ -1310,7 +1324,6 @@ if __name__ == "__main__":
 
         config = key_val_tuples.feed_into(dict)
         keys, vals = key_val_tuples.transpose()
-
 
     player_scores = [12, 55, 89, 82, 37, 16]
     qualified = (

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import statistics as st
+import typing as tp
 from collections.abc import Callable, Iterable
 from decimal import Decimal
 from fractions import Fraction
 from functools import wraps
-import statistics as st
-import typing as tp
 
 
 # TODO: a better way to register modules
@@ -34,7 +34,7 @@ class Stats[TNumber: (float, Decimal, Fraction) = float](tp.NamedTuple):
 
 
 class stats[TNumber: (float, Decimal, Fraction) = float]:
-    def __init__(self, iterable: Iterable[TNumber]):
+    def __init__(self, iterable: Iterable[TNumber]) -> None:
         self.iterable = iterable
 
     mean = register_stats(st.mean)
@@ -53,7 +53,7 @@ class stats[TNumber: (float, Decimal, Fraction) = float]:
     multimode = register_stats(st.multimode)
     quantiles = register_stats(st.quantiles)
 
-    def __call__(self):
+    def __call__(self) -> Stats[TNumber]:
         lst = list(self.iterable)
         return Stats(
             mean=st.mean(lst),
@@ -63,6 +63,6 @@ class stats[TNumber: (float, Decimal, Fraction) = float]:
             minimum=min(lst),
             maximum=max(lst),
             quantiles=tuple[TNumber, TNumber, TNumber](
-                st.quantiles(lst, n=4, method="inclusive")
+                st.quantiles(tp.cast(Iterable[TNumber], lst), n=4, method="inclusive")
             ),
         )

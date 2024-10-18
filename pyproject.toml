@@ -19,7 +19,52 @@ dev-dependencies = [
   "pyright>=1.1.383",
   "pre-commit>=4.0.1",
 ]
+upgrade = true
+
+[tool.ruff]
+line-length = 90
+src = ["src", "test"]
+
+[tool.ruff.format]
+preview = true
+
+[tool.ruff.lint]
+preview = true
+select = [
+  "E",   # pycodestyle
+  "F",   # Pyflakes
+  "FA",  # future annotations
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+  "SIM", # flake8-simplify
+  "I",   # isort
+  "ANN", # type annotations
+  "FBT", # boolean trap
+  "C4",  # flake8-comprehension
+  "PT",  # flake8-pytest-style
+  "TCH", # flake8-type-checking
+  # pylint
+  # "PL",
+  "RUF",
+  "DOC",
+  "FURB",
+  "PERF",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["ANN201", "ANN001"]
+"src/**.py" = ["E501"]
 
 [tool.basedpyright]
-venvPath = "."
 pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+enableExperimentalFeatures = true
+# rules
+reportUnknownVariableType = "warning"
+reportMatchNotExhaustive = "error"
+reportPrivateUsage = "warning"
+reportOptionalMemberAccess = "warning"
