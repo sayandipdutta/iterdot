@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import typing as tp
 
-from iterdot.wtyping import SupportsLT, SupportsGT
+from iterdot.wtyping import SupportsGT, SupportsLT
 
 
 class Indexed[T](tp.NamedTuple):
