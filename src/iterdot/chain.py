@@ -501,6 +501,24 @@ class Iter[T](Iterator[T]):
             self._last_yielded_index += 1
         return self._last_yielded_value
 
+    def all(self) -> bool:
+        return all(self)
+
+    def any(self) -> bool:
+        return any(self)
+
+    def all_equal(self) -> bool:
+        first = self.first()
+        if first is Exhausted:
+            return True
+        return all(first == item for item in self)
+
+    def all_equal_with(self, value: T | None = None) -> bool:
+        # BUG: potential bug, what happens if value is Exhausted, and iterable empty
+        if self.first() == Default.Exhausted != value:
+            return False
+        return all(value == item for item in self)
+
     def map_partial[R, **P](
         self,
         func: Callable[tp.Concatenate[T, P], R],
@@ -1182,6 +1200,33 @@ class SeqIter[T](Sequence[T]):
         *args: Iterable[K],
     ) -> SeqIter[R]:
         return SeqIter(map(func, self, *args))
+
+    def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        if predicate is None:
+            return all(self)
+        return self.map(predicate).all()
+
+    def any(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        if predicate is None:
+            return all(self)
+        return self.map(predicate).all()
+
+    def all_equal(self) -> bool:
+        match self.iterable:
+            case () | (_,):
+                return True
+            case _:
+                first = self.iterable[0]
+                return all(first == item for item in self)
+
+    def all_equal_with(self, value: T | None = None) -> bool:
+        match self.iterable:
+            case ():
+                return False
+            case (first,):
+                return first == value
+            case _:
+                return all(value == item for item in self)
 
     def feed_into[R, **P](
         self,

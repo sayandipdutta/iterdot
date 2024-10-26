@@ -10,13 +10,19 @@ dependencies = []
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
-  "ruff>=0.7.0",
-  "basedpyright>=1.19.0",
-  "pytest>=8.3.3",
-  "pre-commit>=4.0.1",
+[dependency-groups]
+dev = [
+  { include-group = "lint" },
+  { include-group = "typing" },
+  { include-group = "test" },
+  { include-group = "ci" },
 ]
+lint = ["ruff>=0.7.0"]
+typing = ["basedpyright>=1.19.0"]
+test = ["pytest>=8.3.3"]
+ci = ["pre-commit>=4.0.1"]
+
+[tool.uv]
 upgrade = true
 
 [tool.ruff]
