@@ -219,7 +219,7 @@ def test_all_equal():
 
 
 def test_all_equal_with():
-    assert Iter([1] * 5).all_equal_with(5)
+    assert Iter([1] * 5).all_equal_with(1)
     assert not Iter[int]([]).all_equal_with(5)
 
 

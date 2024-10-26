@@ -501,7 +501,7 @@ class Iter[T](Iterator[T]):
             self._last_yielded_index += 1
         return self._last_yielded_value
 
-    def all(self) -> bool:
+    def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
         """
         Check if all elements are Truthy or if given a prediate, check
         if all element evaluate to True when the predicate is applied.
@@ -526,9 +526,11 @@ class Iter[T](Iterator[T]):
             >>> Iter(()).all()
             True
         """
-        return all(self)
+        if predicate is None:
+            return all(self)
+        return self.map(predicate).all()
 
-    def any(self) -> bool:
+    def any(self, predicate: Callable[[T], bool] | None = None) -> bool:
         """
         Check if any elements is Truthy or if given a prediate, check
         if any element evaluates to True when the predicate is applied.
@@ -552,7 +554,9 @@ class Iter[T](Iterator[T]):
             >>> Iter(()).any()
             False
         """
-        return any(self)
+        if predicate is None:
+            return any(self)
+        return self.map(predicate).any()
 
     def all_equal(self) -> bool:
         """
@@ -1334,8 +1338,8 @@ class SeqIter[T](Sequence[T]):
             False
         """
         if predicate is None:
-            return all(self)
-        return self.map(predicate).all()
+            return any(self)
+        return self.map(predicate).any()
 
     def all_equal(self) -> bool:
         """
