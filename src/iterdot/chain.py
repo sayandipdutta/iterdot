@@ -231,9 +231,9 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)
+    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
     """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)
+    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
     """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
@@ -500,6 +500,107 @@ class Iter[T](Iterator[T]):
         else:
             self._last_yielded_index += 1
         return self._last_yielded_value
+
+    def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        """
+        Check if all elements are Truthy or if given a prediate, check
+        if all element evaluate to True when the predicate is applied.
+
+
+        If self is empty, return True.
+
+        Args:
+            predicate (optional callable): if given, check if predicate is Truthy
+                default, None.
+
+        Returns:
+            bool: Whether all the items were Truthy.
+
+        Example:
+            >>> Iter([True] * 5).all()
+            True
+            >>> Iter(range(5)).all(lambda x: x < 5)
+            True
+            >>> Iter(range(5)).all(lambda x: x%2 == 0)
+            False
+            >>> Iter(()).all()
+            True
+        """
+        if predicate is None:
+            return all(self)
+        return self.map(predicate).all()
+
+    def any(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        """
+        Check if any elements is Truthy or if given a prediate, check
+        if any element evaluates to True when the predicate is applied.
+
+        If self is empty, return False.
+
+        Args:
+            predicate (optional callable): if given, check if predicate is Truthy
+                default, None.
+
+        Returns:
+            bool: Whether any of the items were Truthy.
+
+        Example:
+            >>> Iter([True] * 5).any()
+            True
+            >>> Iter(range(5)).any(lambda x: x < 5)
+            True
+            >>> Iter(range(5)).any(lambda x: x%2 == 0)
+            True
+            >>> Iter(()).any()
+            False
+        """
+        if predicate is None:
+            return any(self)
+        return self.map(predicate).any()
+
+    def all_equal(self) -> bool:
+        """
+        Check if all elements are equal to each other.
+
+        If self is empty, return True.
+
+        Returns:
+            bool: Whether all the items were equal.
+
+        Example:
+            >>> Iter([True] * 5).all_equal()
+            True
+            >>> Iter(range(5)).all_equal()
+            False
+            >>> Iter(()).all_equal()
+            True
+        """
+        first = self.first()
+        if first is Exhausted:
+            return True
+        return all(first == item for item in self)
+
+    def all_equal_with(self, value: T | None = None) -> bool:
+        """
+        Check if all elements are equal to the given `value`.
+
+        If self is empty, return False.
+
+        Returns:
+            bool: Whether all the items were equal to `value`.
+
+        Example:
+            >>> Iter([2] * 5).all_equal_with(2)
+            True
+            >>> Iter(range(5)).all_equal_with(2)
+            False
+            >>> Iter(()).all_equal_with(2)
+            False
+        """
+        # BUG: potential bug, what happens if value is Exhausted, and iterable empty
+        if self.first() == Default.Exhausted != value:
+            return False
+        return all(value == item for item in self)
 
     def map_partial[R, **P](
         self,
@@ -1182,6 +1283,112 @@ class SeqIter[T](Sequence[T]):
         *args: Iterable[K],
     ) -> SeqIter[R]:
         return SeqIter(map(func, self, *args))
+
+    def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        """
+        Check if all elements are Truthy or if given a prediate, check
+        if all element evaluate to True when the predicate is applied.
+
+
+        If self is empty, return True.
+
+        Args:
+            predicate (optional callable): if given, check if predicate is Truthy
+                default, None.
+
+        Returns:
+            bool: Whether all the items were Truthy.
+
+        Example:
+            >>> SeqIter([True] * 5).all()
+            True
+            >>> SeqIter(range(5)).all(lambda x: x < 5)
+            True
+            >>> SeqIter(range(5)).all(lambda x: x%2 == 0)
+            False
+            >>> SeqIter(()).all()
+            True
+        """
+        if predicate is None:
+            return all(self)
+        return self.map(predicate).all()
+
+    def any(self, predicate: Callable[[T], bool] | None = None) -> bool:
+        """
+        Check if any elements is Truthy or if given a prediate, check
+        if any element evaluates to True when the predicate is applied.
+
+        If self is empty, return False.
+
+        Args:
+            predicate (optional callable): if given, check if predicate is Truthy
+                default, None.
+
+        Returns:
+            bool: Whether any of the items were Truthy.
+
+        Example:
+            >>> SeqIter([True] * 5).any()
+            True
+            >>> SeqIter(range(5)).any(lambda x: x < 5)
+            True
+            >>> SeqIter(range(5)).any(lambda x: x%2 == 0)
+            True
+            >>> SeqIter(()).any()
+            False
+        """
+        if predicate is None:
+            return any(self)
+        return self.map(predicate).any()
+
+    def all_equal(self) -> bool:
+        """
+        Check if all elements are equal to each other.
+
+        If self is empty, return True.
+
+        Returns:
+            bool: Whether all the items were equal.
+
+        Example:
+            >>> SeqIter([True] * 5).all_equal()
+            True
+            >>> SeqIter(range(5)).all_equal()
+            False
+            >>> SeqIter(()).all_equal()
+            True
+        """
+        match self.iterable:
+            case () | (_,):
+                return True
+            case _:
+                first = self.iterable[0]
+                return all(first == item for item in self)
+
+    def all_equal_with(self, value: T | None = None) -> bool:
+        """
+        Check if all elements are equal to the given `value`.
+
+        If self is empty, return False.
+
+        Returns:
+            bool: Whether all the items were equal to `value`.
+
+        Example:
+            >>> SeqIter([2] * 5).all_equal_with(2)
+            True
+            >>> SeqIter(range(5)).all_equal_with(2)
+            False
+            >>> SeqIter(()).all_equal_with(2)
+            False
+        """
+        match self.iterable:
+            case ():
+                return False
+            case (first,):
+                return first == value
+            case _:
+                return all(value == item for item in self)
 
     def feed_into[R, **P](
         self,
