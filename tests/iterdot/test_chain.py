@@ -190,6 +190,39 @@ def test_min():
         _ = Iter(()).min()
 
 
+def test_all():
+    assert Iter([True] * 5).all()
+    assert not Iter([True, False] * 5).all()
+    assert Iter(()).all()
+
+
+def test_all_predicate():
+    assert Iter([0, 2, 4, 6]).all(predicate=lambda x: x % 2 == 0)
+    assert Iter(()).all(predicate=lambda x: x % 2 == 0)
+
+
+def test_any():
+    assert Iter([True, False] * 5).any()
+    assert not Iter([False] * 5).any()
+    assert not Iter(()).any()
+
+
+def test_any_predicate():
+    assert not Iter([0, 2, 4, 6]).any(predicate=lambda x: x % 2 == 1)
+    assert not Iter(()).any(predicate=lambda x: x % 2 == 0)
+
+
+def test_all_equal():
+    assert Iter([1] * 5).all_equal()
+    assert not Iter([1, 1, 1, 1, 2, 1]).all_equal()
+    assert Iter([]).all_equal()
+
+
+def test_all_equal_with():
+    assert Iter([1] * 5).all_equal_with(5)
+    assert not Iter[int]([]).all_equal_with(5)
+
+
 def test__iter__():
     it = Iter(range(5))
     assert iter(it) is it
