@@ -80,6 +80,23 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
         yield item
 
 
+def _skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        for key in kwargs:
+            match key:
+                case "take_first":
+                    break
+                case "skip" | "take":
+                    kwargs["take_first"] = key == "take"
+                    break
+                case unexpected_kwarg:
+                    raise ValueError(f"Unexpected keyword argument: {unexpected_kwarg}")
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 class Iter[T](Iterator[T]):
     """
     Iterator over a given iterable, providing method chaining.
@@ -231,9 +248,9 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
+    accumulate = MethodKind[T].augmentor(it.accumulate)
     """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
+    slice = MethodKind[T].augmentor(it.islice)
     """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
@@ -900,12 +917,7 @@ class Iter[T](Iterator[T]):
             yield from it.repeat(*s1)
             yield from it.repeat(*s2)
 
-    # TODO: explore if take_first can be emulated with
-    # order of arguments, i.e. by looking at the order
-    # of **kwargs, where **kwargs: TypedDict[skip: int, take: int]
-    # also check if signature can be overloaded
-    # if not, explore decorator approach to patch `take_first`
-    # argument based on order of kw args.
+    @_skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> Iter[T]:
         if take_first:
             selectors = self._get_skip_take_selectors((True, take), (False, skip))
@@ -1466,6 +1478,7 @@ class SeqIter[T](Sequence[T]):
     # also check if signature can be overloaded
     # if not, explore decorator approach to patch `take_first`
     # argument based on order of kw args.
+    @_skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> SeqIter[T]:
         if take_first:
             selectors = self._get_skip_take_selectors((True, take), (False, skip))
