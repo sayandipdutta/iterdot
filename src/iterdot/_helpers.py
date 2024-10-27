@@ -37,11 +37,14 @@ def sliding_window[T](it: Iterator[T] | Sequence[T], n: int) -> Iterable[tuple[T
     window = deque[T](maxlen=n)
     if isinstance(it, Iterator):
         nitems = islice(it, n)
-    else:
-        nitems = it[:n]
-        it = it[n:]
-    window.extend(nitems)
-    yield tuple(window)
-    for item in it:
-        window.append(item)
+        window.extend(nitems)
         yield tuple(window)
+        for item in it:
+            window.append(item)
+            yield tuple(window)
+    else:
+        length = len(it)
+        for i in range(length):
+            yield tuple(it[i : i + n])
+            if length - i - 1 < n:
+                break
