@@ -83,10 +83,10 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
 def _skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        if "take_first" in kwargs:
+            return func(*args, **kwargs)
         for key in kwargs:
             match key:
-                case "take_first":
-                    break
                 case "skip" | "take":
                     kwargs["take_first"] = key == "take"
                     break
@@ -248,9 +248,9 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)
+    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
     """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)
+    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
     """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
@@ -919,6 +919,29 @@ class Iter[T](Iterator[T]):
 
     @_skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> Iter[T]:
+        """
+        skip some elements followed by take some elements, or vice versa.
+
+        Whether to take first, or skip first, can be specified in two ways.
+        1. Via `take_first` boolean flag.
+        2. Via order of the arguments, that is, skip=s, take=t will skip first,
+        whereas, take=t, skip=s, will take first.
+
+        Args:
+            skip (int): number of elements to skip.
+            take (int): number of elements to take.
+            take_first (Optional[bool]): If True, take first, else skip first.
+                default, False.
+
+        Returns:
+            Self
+
+        Examples:
+            >>> Iter(range(10)).skip_take(skip=2, take=3).to_list()
+            [2, 3, 4, 7, 8, 9]
+            >>> Iter(range(10)).skip_take(take=3, skip=2).to_list()
+            [0, 1, 2, 5, 6, 7]
+        """
         if take_first:
             selectors = self._get_skip_take_selectors((True, take), (False, skip))
         else:
@@ -1472,14 +1495,31 @@ class SeqIter[T](Sequence[T]):
             yield from it.repeat(*s1)
             yield from it.repeat(*s2)
 
-    # TODO: explore if take_first can be emulated with
-    # order of arguments, i.e. by looking at the order
-    # of **kwargs, where **kwargs: TypedDict[skip: int, take: int]
-    # also check if signature can be overloaded
-    # if not, explore decorator approach to patch `take_first`
-    # argument based on order of kw args.
     @_skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> SeqIter[T]:
+        """
+        skip some elements followed by take some elements, or vice versa.
+
+        Whether to take first, or skip first, can be specified in two ways.
+        1. Via `take_first` boolean flag.
+        2. Via order of the arguments, that is, skip=s, take=t will skip first,
+        whereas, take=t, skip=s, will take first.
+
+        Args:
+            skip (int): number of elements to skip.
+            take (int): number of elements to take.
+            take_first (Optional[bool]): If True, take first, else skip first.
+                default, False.
+
+        Returns:
+            Self
+
+        Examples:
+            >>> SeqIter(range(10)).skip_take(skip=2, take=3).to_list()
+            [2, 3, 4, 7, 8, 9]
+            >>> SeqIter(range(10)).skip_take(take=3, skip=2).to_list()
+            [0, 1, 2, 5, 6, 7]
+        """
         if take_first:
             selectors = self._get_skip_take_selectors((True, take), (False, skip))
         else:
@@ -1529,8 +1569,19 @@ class SeqIter[T](Sequence[T]):
 if __name__ == "__main__":
     from doctest import testmod
     from pathlib import Path
+    from textwrap import dedent
 
     dummy_file = Path("./dummy.config").resolve()
+    content = dedent(
+        """
+        python-version = 3.13
+        configpath = 'path/to/config'
+
+        PORT = 8000
+        """
+    )
+    if not dummy_file.is_file():
+        _ = dummy_file.write_text(content)
 
     # fmt: off
     with dummy_file.open() as file_handle:

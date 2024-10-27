@@ -306,6 +306,16 @@ def test_skip():
     assert Iter(range(100)).skip(5).skip(90).to_list() == [95, 96, 97, 98, 99]
 
 
+def test_skip_take():
+    r = range(10)
+    skip_first = [2, 3, 4, 7, 8, 9]
+    take_first = [0, 1, 2, 5, 6, 7]
+    assert Iter(r).skip_take(skip=2, take=3).to_list() == skip_first
+    assert Iter(r).skip_take(skip=2, take=3, take_first=True).to_list() == take_first
+    assert Iter(r).skip_take(take=3, skip=2, take_first=False).to_list() == skip_first
+    assert Iter(r).skip_take(take=3, skip=2).to_list() == take_first
+
+
 def test_exhaust():
     itrtr = Iter(range(5, 0, -1))
     itrtr.exhaust()
