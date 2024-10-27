@@ -1453,6 +1453,8 @@ class SeqIter[T](Sequence[T]):
     @tp.overload
     def first[TDefault](self, default: TDefault) -> T | TDefault: ...
     def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        if self:
+            return self[0]
         return self[0] if default is NoDefault else default
 
     # TODO: support getitem
@@ -1475,6 +1477,8 @@ class SeqIter[T](Sequence[T]):
     @tp.overload
     def last[TDefault](self, default: TDefault) -> T | TDefault: ...
     def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+        if self:
+            return self[-1]
         return self[-1] if default is NoDefault else default
 
     def tail(self, n: int) -> SeqIter[T]:
