@@ -104,7 +104,7 @@ class Iter[T](Iterator[T]):
         iterable: an iterable that is to be turned into an Iter
     """
 
-    def __init__(self, iterable: Iterable[T]) -> None:
+    def __init__(self, iterable: Iterable[T] = ()) -> None:
         self.iterable = iterable
         self._iter: Iterator[T] = (
             iter(iterable) if not isinstance(iterable, Iter) else iterable._iter
@@ -1161,7 +1161,7 @@ class Iter[T](Iterator[T]):
 
 
 class SeqIter[T](Sequence[T]):
-    def __init__(self, iterable: Iterable[T]) -> None:
+    def __init__(self, iterable: Iterable[T] = ()) -> None:
         if not isinstance(iterable, SeqIter):
             self._iterable = iterable if isinstance(iterable, tuple) else tuple(iterable)
         else:
