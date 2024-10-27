@@ -1567,6 +1567,17 @@ class SeqIter[T](Sequence[T]):
     def to_list(self) -> list[T]:
         return list(self.iterable)
 
+    @tp.override
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(iterable={self.iterable!r})"
+
+    @tp.override
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(iterable={self.iterable})"
+
+    repr = __repr__
+    str = __str__
+
 
 if __name__ == "__main__":
     from doctest import testmod
