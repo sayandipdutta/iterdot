@@ -10,7 +10,6 @@ from decimal import Decimal
 from fractions import Fraction
 from functools import reduce, wraps
 from operator import attrgetter
-from pprint import pformat
 
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
@@ -1565,6 +1564,9 @@ class SeqIter[T](Sequence[T]):
             case "back":
                 return SeqIter(it.chain(*its, self.iterable))
 
+    def to_list(self) -> list[T]:
+        return list(self.iterable)
+
 
 if __name__ == "__main__":
     from doctest import testmod
@@ -1607,7 +1609,7 @@ if __name__ == "__main__":
     statistics = qualified.stats()
     # fmt: on
 
-    print(f"config: {pformat(config)}")
+    print(f"config: {config}")
     print(f"Winner => player_id: {minmax_info.max.idx}, score: {minmax_info.max.value}")
     print(f"Loser  => player_id: {minmax_info.min.idx}, score: {minmax_info.min.value}")
     print(f"Player Stats: {statistics}")
