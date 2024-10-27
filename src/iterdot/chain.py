@@ -8,9 +8,10 @@ from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from decimal import Decimal
 from fractions import Fraction
-from functools import reduce, wraps
-from operator import attrgetter
+from functools import partial, reduce, wraps
+from operator import add, attrgetter
 
+from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.plugins.stats import stats
@@ -66,34 +67,6 @@ class MethodKind[T]:
             return Iter(func(predicate, self, *args, **kwargs))
 
         return inner
-
-
-def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
-    return it.chain(val, to)
-
-
-def flatten(iterable: Iterable[object]) -> Iterable[object]:
-    for item in iterable:
-        if isinstance(item, Iterable) and not isinstance(item, str):
-            yield from flatten(tp.cast(Iterable[object], item))
-        yield item
-
-
-def _skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        if "take_first" in kwargs:
-            return func(*args, **kwargs)
-        for key in kwargs:
-            match key:
-                case "skip" | "take":
-                    kwargs["take_first"] = key == "take"
-                    break
-                case unexpected_kwarg:
-                    raise ValueError(f"Unexpected keyword argument: {unexpected_kwarg}")
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 class Iter[T](Iterator[T]):
@@ -916,7 +889,7 @@ class Iter[T](Iterator[T]):
             yield from it.repeat(*s1)
             yield from it.repeat(*s2)
 
-    @_skip_take_by_order
+    @skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> Iter[T]:
         """
         skip some elements followed by take some elements, or vice versa.
@@ -1158,6 +1131,67 @@ class Iter[T](Iterator[T]):
         if indexed:
             return enumerated.starmap(Indexed)
         return enumerated
+
+    # TODO: Consider complex padding: +ve int for left, -ve int for right, complex for left right
+    @tp.overload
+    def sliding_window(
+        self, n: int, *, fill_value: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> Iter[tuple[T, ...]]: ...
+    @tp.overload
+    def sliding_window[F](
+        self,
+        n: int,
+        *,
+        fill_value: F,
+        pad: tp.Literal["left", "right", "both"] = "left",
+    ) -> Iter[tuple[T | F, ...]]: ...
+    def sliding_window[F](
+        self,
+        n: int,
+        *,
+        fill_value: F | tp.Literal[Default.NoDefault] = NoDefault,
+        pad: tp.Literal["left", "right", "both"] = "both",
+    ) -> Iter[tuple[T, ...]] | Iter[tuple[T | F, ...]]:
+        """
+        Sliding window over self.
+
+        Args:
+            n (int): Size of the window
+            fill_value (object, optional): If present, used for padding.
+            pad (str): 'left', 'right', or 'both'; indicating which side should be padded.
+
+        Returns:
+            Iter: Iter of n-tuples
+
+        Example:
+            >>> itbl = [1, 2, 3]
+            >>> Iter(itbl).sliding_window(2).to_list()
+            [(1, 2), (2, 3)]
+            >>> Iter(itbl).sliding_window(2, fill_value=0).to_list()
+            [(0, 1), (1, 2), (2, 3), (3, 0)]
+            >>> Iter(itbl).sliding_window(2, fill_value=0, pad="left").to_list()
+            [(0, 1), (1, 2), (2, 3)]
+            >>> Iter(itbl).sliding_window(2, fill_value=0, pad="right").to_list()
+            [(1, 2), (2, 3), (3, 0)]
+            >>> Iter(itbl).sliding_window(5).to_list()
+            [(1, 2, 3)]
+            >>> Iter(itbl).sliding_window(5, fill_value=0, pad="left").to_list()
+            [(0, 0, 0, 0, 1), (0, 0, 0, 1, 2), (0, 0, 1, 2, 3)]
+            >>> Iter([1]).sliding_window(3, fill_value=0).to_list()
+            [(0, 0, 1), (0, 1, 0), (1, 0, 0)]
+        """
+        if fill_value is NoDefault:
+            return Iter(sliding_window(self, n))
+        if self.peek_next_value() is Exhausted:
+            return Iter[tuple[T, ...]]()
+
+        fill = partial(it.repeat, fill_value, n - 1)
+        padding = ["left", "right"] if pad == "both" else [pad]
+        if "left" in padding:
+            self = self.concat(fill(), self_position="back")
+        if "right" in padding:
+            self = self.concat(fill())
+        return self.sliding_window(n)
 
 
 class SeqIter[T](Sequence[T]):
@@ -1498,7 +1532,7 @@ class SeqIter[T](Sequence[T]):
             yield from it.repeat(*s1)
             yield from it.repeat(*s2)
 
-    @_skip_take_by_order
+    @skip_take_by_order
     def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> SeqIter[T]:
         """
         skip some elements followed by take some elements, or vice versa.
@@ -1562,11 +1596,74 @@ class SeqIter[T](Sequence[T]):
                 f'`self_position` must be "front" or "back", got {self_position!r}'
             )
 
+        result: tuple[R] = reduce(add, map(tuple[R], its), _initial := tuple[R]())
         match self_position:
             case "front":
-                return SeqIter(it.chain(self.iterable, *its))
+                return SeqIter(self.iterable + result)
             case "back":
-                return SeqIter(it.chain(*its, self.iterable))
+                return SeqIter(result + self.iterable)
+
+    # TODO: Consider complex padding: +ve int for left, -ve int for right, complex for left right
+    # TODO: Consider left pad, right pad
+    @tp.overload
+    def sliding_window(
+        self, n: int, *, fill_value: tp.Literal[Default.NoDefault] = NoDefault
+    ) -> SeqIter[tuple[T, ...]]: ...
+    @tp.overload
+    def sliding_window[F](
+        self,
+        n: int,
+        *,
+        fill_value: F,
+        pad: tp.Literal["left", "right", "both"] = "left",
+    ) -> SeqIter[tuple[T | F, ...]]: ...
+    def sliding_window[F](
+        self,
+        n: int,
+        *,
+        fill_value: F | tp.Literal[Default.NoDefault] = NoDefault,
+        pad: tp.Literal["left", "right", "both"] = "both",
+    ) -> SeqIter[tuple[T, ...]] | SeqIter[tuple[T | F, ...]]:
+        """
+        Sliding window over self.
+
+        Args:
+            n (int): Size of the window
+            fill_value (object, optional): If present, used for padding.
+            pad (str): 'left', 'right', or 'both'; indicating which side should be padded.
+
+        Returns:
+            Iter: Iter of n-tuples
+
+        Example:
+            >>> itbl = [1, 2, 3]
+            >>> SeqIter(itbl).sliding_window(2).to_list()
+            [(1, 2), (2, 3)]
+            >>> SeqIter(itbl).sliding_window(2, fill_value=0).to_list()
+            [(0, 1), (1, 2), (2, 3), (3, 0)]
+            >>> SeqIter(itbl).sliding_window(2, fill_value=0, pad="left").to_list()
+            [(0, 1), (1, 2), (2, 3)]
+            >>> SeqIter(itbl).sliding_window(2, fill_value=0, pad="right").to_list()
+            [(1, 2), (2, 3), (3, 0)]
+            >>> SeqIter(itbl).sliding_window(5).to_list()
+            [(1, 2, 3)]
+            >>> SeqIter(itbl).sliding_window(5, fill_value=0, pad="left").to_list()
+            [(0, 0, 0, 0, 1), (0, 0, 0, 1, 2), (0, 0, 1, 2, 3)]
+            >>> SeqIter([1]).sliding_window(3, fill_value=0).to_list()
+            [(0, 0, 1), (0, 1, 0), (1, 0, 0)]
+        """
+        if fill_value is NoDefault:
+            return SeqIter(sliding_window(self.iterable, n))
+        if self.first(default=Exhausted) is Exhausted:
+            return SeqIter[tuple[T, ...]]()
+
+        fill = (fill_value,) * (n - 1)
+        padding = ["left", "right"] if pad == "both" else [pad]
+        if "left" in padding:
+            self = SeqIter[T | F](fill + self.iterable)
+        if "right" in padding:
+            self = SeqIter[T | F](self.iterable + fill)
+        return self.sliding_window(n)
 
     def to_list(self) -> list[T]:
         return list(self.iterable)
