@@ -26,6 +26,22 @@ class Default(enum.Enum):
     Unavailable = enum.auto()
 
 
+class Collector[TIter]:
+    def __init__(self, instance: Iterable[TIter]) -> None:
+        self.instance = instance
+
+    def __getitem__[T](self, type: type[T]) -> Callable[[], T]:
+        inner_type = tp.get_args(type)
+        try:
+            inner = inner_type[0]  # pyright: ignore[reportAny]
+            return lambda: type(map(inner, self.instance))  # pyright: ignore[reportCallIssue, reportAny]
+        except (IndexError, TypeError, ValueError):
+            return lambda: type(self.instance)  # pyright: ignore[reportCallIssue]
+
+    def __call__(self) -> SeqIter[TIter]:
+        return SeqIter(self.instance)
+
+
 # TODO: Replace with enum.global_enum if ever supported in pyright
 Exhausted: tp.Literal[Default.Exhausted] = Default.Exhausted
 NoDefault: tp.Literal[Default.NoDefault] = Default.NoDefault
@@ -237,13 +253,9 @@ class Iter[T](Iterator[T]):
     to_list = MethodKind[T].consumer(list)
     """convert to list"""
 
-    def load_in_memory(self) -> SeqIter[T]:
-        """convert to SeqIter
-
-        Returns:
-            SeqIter
-        """
-        return SeqIter(self)
+    @property
+    def collect(self) -> Collector[T]:
+        return Collector[T](self)
 
     @tp.overload
     def max[TComparable: Comparable, RComparable: Comparable, F](
@@ -1458,7 +1470,7 @@ class SeqIter[T](Sequence[T]):
             case _:
                 return all(value == item for item in self)
 
-    def feed_into[R, **P](
+    def collect_in[R, **P](
         self,
         func: Callable[tp.Concatenate[Iterable[T], P], R],
         *args: P.args,
@@ -1704,17 +1716,17 @@ if __name__ == "__main__":
             .map(str.strip)
             .filter(None)
             .map_partial(str.split, sep=" = ", maxsplit=1)
-            .load_in_memory()
+            .collect()
         )
 
-        config = key_val_tuples.feed_into(dict)
+        config = key_val_tuples.collect_in(dict)
         keys, vals = key_val_tuples.transpose()
 
     player_scores = [12, 55, 89, 82, 37, 16]
     qualified = (
         Iter(player_scores)
         .filter(lambda x: x > 35)
-        .load_in_memory()
+        .collect[SeqIter[int]]()
     )
 
     minmax_info = qualified.enumerate().minmax()
