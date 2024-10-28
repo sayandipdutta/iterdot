@@ -6,7 +6,7 @@ from typing import Any, no_type_check
 
 import pytest
 
-from iterdot.chain import Default, Iter
+from iterdot.chain import Default, Iter, SeqIter
 
 
 def consume(iterable: Iterable[Any]):
@@ -16,6 +16,10 @@ def consume(iterable: Iterable[Any]):
 @pytest.fixture
 def integers_from_0_to_1000() -> list[int]:
     return list(range(0, 1_001))
+
+
+def Iter_range_10() -> Iter[int]:
+    return Iter(range(10))
 
 
 def test_peek_next_index(integers_from_0_to_1000: list[int]):
@@ -337,3 +341,15 @@ def test_foreach(capsys):
 4
 """
     )
+
+
+def test_collect():
+    assert isinstance(Iter_range_10().collect(), SeqIter)
+    assert isinstance(Iter_range_10().collect[list](), list)
+    assert isinstance(Iter_range_10().collect[list[str]](), list)
+    assert isinstance(Iter_range_10().collect[list[str]]()[0], str)
+
+    # TRY to support the following
+    # it = Iter(zip("abc", "123", strict=True)).collect[tuple[tuple[str, int]]]()
+    # print(it)
+    # assert isinstance(it[0][1], int)
