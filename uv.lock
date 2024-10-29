@@ -69,10 +69,10 @@ wheels = [
 
 [[package]]
 name = "iterdot"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "." }
 
-[package.dependency-groups]
+[package.dev-dependencies]
 ci = [
     { name = "pre-commit" },
 ]
@@ -94,7 +94,7 @@ typing = [
 
 [package.metadata]
 
-[package.metadata.dependency-groups]
+[package.metadata.requires-dev]
 ci = [{ name = "pre-commit", specifier = ">=4.0.1" }]
 dev = [
     { name = "basedpyright", specifier = ">=1.19.0" },
