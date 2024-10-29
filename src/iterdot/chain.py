@@ -5,7 +5,7 @@ import enum
 import itertools as it
 import typing as tp
 from collections import deque
-from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -1113,7 +1113,7 @@ class Iter[T](Iterator[T]):
     def append[V](self, *values: V) -> Iter[T | V]:
         return Iter(it.chain(self, values))
 
-    def flatten_once[T1](self: Iter[tuple[T1, ...]]) -> Iter[T1]:
+    def flatten_once[T1](self: Iter[Iterable[T1]]) -> Iter[T1]:
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
@@ -1205,6 +1205,14 @@ class Iter[T](Iterator[T]):
             self = self.concat(fill())
         return self.sliding_window(n)
 
+    def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        return Iter(it.product(self, other))
+
+    def product3[T2, T3](
+        self, it1: Iterable[T2], it2: Iterable[T3]
+    ) -> Iter[tuple[T, T2, T3]]:
+        return Iter(it.product(self, it1, it2))
+
 
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
@@ -1247,22 +1255,6 @@ class SeqIter[T](Sequence[T]):
 
     def reversed(self) -> Iter[T]:
         return Iter(reversed(self.iterable))
-
-    @tp.overload
-    def enumerate(
-        self, *, indexed: tp.Literal[False], start: int = 0
-    ) -> SeqIter[tuple[int, T]]: ...
-    @tp.overload
-    def enumerate(
-        self, *, indexed: tp.Literal[True] = True, start: int = 0
-    ) -> SeqIter[Indexed[T]]: ...
-    def enumerate(
-        self, *, indexed: bool = True, start: int = 0
-    ) -> SeqIter[tuple[int, T]] | SeqIter[Indexed[T]]:
-        enumerated = SeqIter(enumerate(self.iterable, start=start))
-        if indexed:
-            return enumerated.starmap(Indexed)
-        return enumerated
 
     @tp.overload
     def max[TComparable: Comparable, RComparable: Comparable, F](
@@ -1421,55 +1413,6 @@ class SeqIter[T](Sequence[T]):
             return any(self)
         return self.map(predicate).any()
 
-    def all_equal(self) -> bool:
-        """
-        Check if all elements are equal to each other.
-
-        If self is empty, return True.
-
-        Returns:
-            bool: Whether all the items were equal.
-
-        Example:
-            >>> SeqIter([True] * 5).all_equal()
-            True
-            >>> SeqIter(range(5)).all_equal()
-            False
-            >>> SeqIter(()).all_equal()
-            True
-        """
-        match self.iterable:
-            case () | (_,):
-                return True
-            case _:
-                first = self.iterable[0]
-                return all(first == item for item in self)
-
-    def all_equal_with(self, value: T | None = None) -> bool:
-        """
-        Check if all elements are equal to the given `value`.
-
-        If self is empty, return False.
-
-        Returns:
-            bool: Whether all the items were equal to `value`.
-
-        Example:
-            >>> SeqIter([2] * 5).all_equal_with(2)
-            True
-            >>> SeqIter(range(5)).all_equal_with(2)
-            False
-            >>> SeqIter(()).all_equal_with(2)
-            False
-        """
-        match self.iterable:
-            case ():
-                return False
-            case (first,):
-                return first == value
-            case _:
-                return all(value == item for item in self)
-
     def collect_in[R, **P](
         self,
         func: Callable[tp.Concatenate[Iterable[T], P], R],
@@ -1477,20 +1420,6 @@ class SeqIter[T](Sequence[T]):
         **kwargs: P.kwargs,
     ) -> R:
         return func(self, *args, **kwargs)
-
-    def filter(
-        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
-    ) -> SeqIter[T]:
-        return (
-            SeqIter(it.filterfalse(predicate, self.iterable))
-            if invert
-            else SeqIter(filter(predicate, self.iterable))
-        )
-
-    def starmap[*Ts, R](
-        self: SeqIter[tuple[*Ts]], func: Callable[[*Ts], R]
-    ) -> SeqIter[R]:
-        return SeqIter(it.starmap(func, self))
 
     @tp.overload
     def first[TDefault](
@@ -1533,8 +1462,10 @@ class SeqIter[T](Sequence[T]):
     def skip(self, n: int) -> SeqIter[T]:
         return SeqIter(self[n:])
 
-    def foreach(self, func: Callable[[T], None]) -> None:
-        self.iter().foreach(func)
+    def slice(
+        self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
+    ) -> SeqIter[T]:
+        return SeqIter(self.iterable[start:stop:step])
 
     @staticmethod
     def _get_skip_take_selectors(
@@ -1679,6 +1610,51 @@ class SeqIter[T](Sequence[T]):
 
     def to_list(self) -> list[T]:
         return list(self.iterable)
+
+    def feed_into[R, **P](
+        self,
+        func: Callable[tp.Concatenate[Iterable[T], P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """
+        Apply a function which takes the whole of self as its first argument.
+
+        Args:
+            func: A callable which takes the whole of self as its first argument.
+            *args: Other positional arguments to the function if any.
+            **kwargs: Keywork arguments to the function if any.
+
+        Returns:
+            R: return value of `func`.
+
+        Example:
+            >>> SeqIter([("a", 0), ("b", 1)]).feed_into(dict)
+            {'a': 0, 'b': 1}
+            >>> SeqIter([1, 2, 3, 4]).sum(start=10)
+            20
+        """
+        return func(self, *args, **kwargs)
+
+    def len(self) -> int:
+        return len(self.iterable)
+
+    def sorted[TComp: Comparable, RComp: Comparable](
+        self: SeqIter[TComp],
+        *,
+        reverse: bool = False,
+        key: Callable[[TComp], RComp] | None = None,
+    ) -> SeqIter[TComp]:
+        return SeqIter(sorted(self, reverse=reverse, key=key))
+
+    def inspect(self, func: Callable[[T], object]) -> SeqIter[T]:
+        def inner() -> Generator[T]:
+            for item in self:
+                _ = func(item)
+                del _
+                yield item
+
+        return SeqIter(inner())
 
     @tp.override
     def __repr__(self) -> str:
