@@ -1078,6 +1078,37 @@ class Iter[T](Iterator[T]):
     ) -> Iter[tuple[T, T1, T2, T3]]:
         return Iter(zip(self, iter1, iter2, iter3, strict=strict))
 
+    def product_2[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of two iterables
+        """
+        return Iter(it.product(self, other))
+
+    def product_3[T2, T3](
+        self, it1: Iterable[T2], it2: Iterable[T3]
+    ) -> Iter[tuple[T, T2, T3]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of three iterables
+        """
+        return Iter(it.product(self, it1, it2))
+
+    def product_n[R](
+        self, *itbl: Iterable[R], repeat: int = 1
+    ) -> Iter[tuple[T | R, ...]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of n iterables
+        """
+        return Iter(it.product(self, *itbl, repeat=repeat))
+
     def transpose_eager[TSized: Sized](
         self: Iter[TSized],
         *,
