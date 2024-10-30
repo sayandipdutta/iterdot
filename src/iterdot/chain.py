@@ -1113,7 +1113,7 @@ class Iter[T](Iterator[T]):
     def append[V](self, *values: V) -> Iter[T | V]:
         return Iter(it.chain(self, values))
 
-    def flatten_once[T1](self: Iter[tuple[T1, ...]]) -> Iter[T1]:
+    def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
