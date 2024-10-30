@@ -236,9 +236,9 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)
+    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
     """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)
+    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
     """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
