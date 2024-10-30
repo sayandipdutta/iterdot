@@ -142,6 +142,7 @@ class Iter[T](Iterator[T]):
             if window_size is None:
                 item = tp.cast(T, start)
                 func = tp.cast(Callable[[T], T], producer)
+                yield item
                 while True:
                     yield (item := func(item))
             else:
