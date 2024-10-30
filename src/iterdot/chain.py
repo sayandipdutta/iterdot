@@ -14,6 +14,7 @@ from operator import add, attrgetter
 from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
+from iterdot.operators import Unpacked
 from iterdot.plugins.stats import stats
 from iterdot.wtyping import Comparable
 
@@ -1311,7 +1312,7 @@ class SeqIter[T](Sequence[T]):
     ) -> SeqIter[tuple[int, T]] | SeqIter[Indexed[T]]:
         enumerated = SeqIter(enumerate(self.iterable, start=start))
         if indexed:
-            return enumerated.starmap(Indexed)
+            return enumerated.map(Unpacked(Indexed))
         return enumerated
 
     @tp.overload
@@ -1528,20 +1529,6 @@ class SeqIter[T](Sequence[T]):
     ) -> R:
         return func(self, *args, **kwargs)
 
-    def filter(
-        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
-    ) -> SeqIter[T]:
-        return (
-            SeqIter(it.filterfalse(predicate, self.iterable))
-            if invert
-            else SeqIter(filter(predicate, self.iterable))
-        )
-
-    def starmap[*Ts, R](
-        self: SeqIter[tuple[*Ts]], func: Callable[[*Ts], R]
-    ) -> SeqIter[R]:
-        return SeqIter(it.starmap(func, self))
-
     @tp.overload
     def first[TDefault](
         self, default: tp.Literal[Default.NoDefault] = NoDefault
@@ -1582,9 +1569,6 @@ class SeqIter[T](Sequence[T]):
 
     def skip(self, n: int) -> SeqIter[T]:
         return SeqIter(self[n:])
-
-    def foreach(self, func: Callable[[T], None]) -> None:
-        self.iter().foreach(func)
 
     @staticmethod
     def _get_skip_take_selectors(
