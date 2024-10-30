@@ -683,8 +683,8 @@ class Iter[T](Iterator[T]):
         Example:
             >>> Iter([("a", 0), ("b", 1)]).feed_into(dict)
             {'a': 0, 'b': 1}
-            >>> Iter([1, 2, 3, 4]).sum(start=10)
-            20
+            >>> Iter([1, 2, 3, 4]).feed_into(sum)
+            10
         """
         return func(self, *args, **kwargs)
 
@@ -1205,6 +1205,25 @@ class Iter[T](Iterator[T]):
             self = self.concat(fill())
         return self.sliding_window(n)
 
+    def collect_in[R, **P](
+        self,
+        container: Callable[tp.Concatenate[Iterable[T], P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """
+        Similar to feed_into.
+
+        Args:
+            container: A callable that takes self as a whole and stores in a container
+            *args: args for the callable (if any)
+            **kwargs: kwargs for the callable (if any)
+
+        Returns:
+            container containing elements of the iterable.
+        """
+        return container(self, *args, **kwargs)
+
 
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
@@ -1676,6 +1695,31 @@ class SeqIter[T](Sequence[T]):
         if "right" in padding:
             self = SeqIter[T | F](self.iterable + fill)
         return self.sliding_window(n)
+
+    def feed_into[R, **P](
+        self,
+        func: Callable[tp.Concatenate[Iterable[T], P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """
+        Apply a function which takes the whole of self as its first argument.
+
+        Args:
+            func: A callable which takes the whole of self as its first argument.
+            *args: Other positional arguments to the function if any.
+            **kwargs: Keywork arguments to the function if any.
+
+        Returns:
+            R: return value of `func`.
+
+        Example:
+            >>> SeqIter([("a", 0), ("b", 1)]).feed_into(dict)
+            {'a': 0, 'b': 1}
+            >>> SeqIter([1, 2, 3, 4]).feed_into(sum)
+            10
+        """
+        return func(self, *args, **kwargs)
 
     def to_list(self) -> list[T]:
         return list(self.iterable)
