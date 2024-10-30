@@ -14,7 +14,7 @@ from operator import add, attrgetter
 from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
-from iterdot.operators import Unpacked
+from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
 from iterdot.wtyping import Comparable
 
@@ -257,6 +257,31 @@ class Iter[T](Iterator[T]):
     @property
     def collect(self) -> Collector[T]:
         return Collector[T](self)
+
+    def find(
+        self, finder: Callable[[T], bool] | T
+    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        """
+        Find a value and its index in the iterable, either by passing the value to find or a callable
+
+        Args:
+            finder (T | callable): Either the value to find, or a callable that returns True for the item
+
+        Returns:
+            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).find(2)
+            Indexed(idx=1, value=2)
+            >>> Iter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
+            Indexed(idx=1, value=2)
+            >>> Iter([1, 2, 3, 4]).find(5)
+            <Default.Unavailable: 3>
+        """
+        if callable(finder):
+            finder = tp.cast(Callable[[T], bool], finder)
+            return self.enumerate().filter(lambda x: finder(x.value)).next(Unavailable)
+        return self.enumerate().filter(IsEqual(finder)).next(Unavailable)
 
     @tp.overload
     def max[TComparable: Comparable, F](
@@ -1798,6 +1823,36 @@ class SeqIter[T](Sequence[T]):
         _ = self.map_partial(func, *args, **kwargs)
         del _
         return self
+
+    def find(
+        self, finder: Callable[[T], bool] | T
+    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        """
+        Find a value and its index in the iterable, either by passing the value to find or a callable
+
+        Args:
+            finder (T | callable): Either the value to find, or a callable that returns True for the item
+
+        Returns:
+            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+
+        Example:
+            >>> SeqIter([1, 2, 3, 4]).find(2)
+            Indexed(idx=1, value=2)
+            >>> SeqIter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
+            Indexed(idx=1, value=2)
+            >>> SeqIter([1, 2, 3, 4]).find(5)
+            <Default.Unavailable: 3>
+        """
+        if callable(finder):
+            finder = tp.cast(Callable[[T], bool], finder)
+            return (
+                self.iter()
+                .enumerate()
+                .filter(lambda x: finder(x.value))
+                .next(Unavailable)
+            )
+        return self.iter().enumerate().filter(IsEqual(finder)).next(Unavailable)
 
     @tp.override
     def __repr__(self) -> str:
