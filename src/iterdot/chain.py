@@ -5,7 +5,7 @@ import enum
 import itertools as it
 import typing as tp
 from collections import deque
-from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -1256,6 +1256,31 @@ class Iter[T](Iterator[T]):
         """
         return container(self, *args, **kwargs)
 
+    def inspect[**P](
+        self,
+        func: Callable[tp.Concatenate[T, P], object],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> Iter[T]:
+        """
+        Applies a function `func` over all the elements, and returns the original self.
+
+        Args:
+            func (Callable): function to apply on each element.
+            *args (object): arguments to the function
+            **kwargs (object): keyword arguments to the function
+
+        Returns:
+            Iter[T]
+        """
+
+        def apply(itbl: Iter[T]) -> Generator[T]:
+            for item in itbl:
+                _ = func(item, *args, **kwargs)
+                yield item
+
+        return Iter(apply(self))
+
 
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
@@ -1752,6 +1777,27 @@ class SeqIter[T](Sequence[T]):
         if key is not None:
             return SeqIter(sorted(self, reverse=reverse, key=key))
         return SeqIter(sorted(self, reverse=reverse))
+
+    def inspect[**P](
+        self,
+        func: Callable[tp.Concatenate[T, P], object],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> tp.Self:
+        """
+        Applies a function `func` over all the elements, and returns the original self.
+
+        Args:
+            func (Callable): function to apply on each element.
+            *args (object): arguments to the function
+            **kwargs (object): keyword arguments to the function
+
+        Returns:
+            Self
+        """
+        _ = self.map_partial(func, *args, **kwargs)
+        del _
+        return self
 
     @tp.override
     def __repr__(self) -> str:
