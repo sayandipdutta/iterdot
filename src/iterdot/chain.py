@@ -102,6 +102,60 @@ class Iter[T](Iterator[T]):
         self._last_yielded_value: T | tp.Literal[Default.Unavailable] = Unavailable
         self._last_yielded_index: int = -1
 
+    @tp.overload
+    @classmethod
+    def successor(
+        cls, start: T, *, producer: Callable[[T], T], window_size: None = None
+    ) -> Iter[T]: ...
+    @tp.overload
+    @classmethod
+    def successor(
+        cls, start: tuple[T], *, producer: Callable[[Iterable[T]], T], window_size: int
+    ) -> Iter[T]: ...
+    @classmethod
+    def successor(
+        cls,
+        start: T | tuple[T],
+        *,
+        producer: Callable[[T], T] | Callable[[Iterable[T]], T],
+        window_size: int | None = None,
+    ) -> Iter[T]:
+        """
+        Create an Iter from a producer function that creates the successive element from last value.
+
+        Args:
+            *start (*Ts): starting element(s)
+            producer (callable): function that creates new element based on previous value(s)
+
+        Returns:
+            Iter
+
+        Example:
+            >>> double = lambda x: 2 * x
+            >>> Iter.successor(1, producer=double).slice(5).to_list()
+            [1, 2, 4, 8, 16]
+            >>> Iter.successor((0, 1), producer=sum, window_size=2).slice(6).to_list()
+            [0, 1, 1, 2, 3, 5]
+        """
+
+        def gen() -> Generator[T]:
+            if window_size is None:
+                item = tp.cast(T, start)
+                func = tp.cast(Callable[[T], T], producer)
+                while True:
+                    yield (item := func(item))
+            else:
+                items = tp.cast(tuple[T, ...], start)
+                assert len(items) == window_size, "window_size != len(start)"
+                func = tp.cast(Callable[[Iterable[T]], T], producer)
+                window = deque(items, maxlen=len(items))
+                yield from window
+                while True:
+                    yield (item := func(window))
+                    window.append(item)
+
+        return Iter(gen())
+
     def peek_next_index(self) -> int:
         """Peek the next index that would be yielded, if there is element left to yield.
 
