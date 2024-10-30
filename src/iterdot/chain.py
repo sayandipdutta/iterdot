@@ -236,9 +236,9 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
+    accumulate = MethodKind[T].augmentor(it.accumulate)
     """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
+    slice = MethodKind[T].augmentor(it.islice)
     """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
@@ -1113,7 +1113,7 @@ class Iter[T](Iterator[T]):
     def append[V](self, *values: V) -> Iter[T | V]:
         return Iter(it.chain(self, values))
 
-    def flatten_once[T1](self: Iter[tuple[T1, ...]]) -> Iter[T1]:
+    def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
