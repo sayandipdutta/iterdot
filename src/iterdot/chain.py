@@ -1306,6 +1306,72 @@ class Iter[T](Iterator[T]):
 
         return Iter(apply(self))
 
+    def groupby_true(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+        """
+        Given a predicate as key, return groups of consecutive items where key evaluates to True
+
+        Args:
+            key (callable): a predicate that is to be applied to items.
+
+        Returns:
+            Iter: consecutive iterable groups of items where predicate was true.
+
+        Example:
+            >>> Iter("...123..4..*&234").groupby_true(str.isdigit).map("".join).to_list()
+            ['123', '4', '234']
+        """
+        return Iter(item[1] for item in it.groupby(self, key) if item[0])
+
+    def groupby_false(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+        """
+        Given a predicate as key, return groups of consecutive items where key evaluates to False
+
+        Args:
+            key (callable): a predicate that is to be applied to items.
+
+        Returns:
+            Iter: consecutive iterable groups of items where predicate was false.
+
+        Example:
+            >>> Iter("...123..4..*&234").groupby_false(str.isdigit).map("".join).to_list()
+            ['...', '..', '..*&']
+        """
+        return Iter(item[1] for item in it.groupby(self, key) if not item[0])
+
+    def groupby(self, key: Callable[[T], bool]) -> Iter[tuple[bool, Iterable[T]]]:
+        """See itertools.groupby
+
+        Returns:
+            Iter of tuples, containing what the predicate evaluated to for that group, and the group
+        """
+        return Iter(it.groupby(self, key))
+
+    def filter_map[R](
+        self, predicate_apply: Callable[[T], tp.Literal[False] | R]
+    ) -> Iter[R]:
+        """
+        Map on filtered elements.
+
+        Args:
+            predicate_apply (callable): A callable that either evaluates to False or returns a value
+
+        Returns:
+            Iter[R]
+
+        Example:
+            >>> Iter([1, 2, 3, 4, 5, 6]).filter_map(lambda x: x % 2 == 0 and x ** 2).to_list()
+            [4, 16, 36]
+            >>> Iter([1, 2, 3, 4, 5, 6]).filter_map(lambda x: x % 2 == x % 3 and str(x)).to_list()
+            ['1', '6']
+        """
+
+        def apply() -> Generator[R]:
+            for item in self:
+                if res := predicate_apply(item):
+                    yield res
+
+        return Iter(apply())
+
 
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
@@ -1853,6 +1919,9 @@ class SeqIter[T](Sequence[T]):
                 .next(Unavailable)
             )
         return self.iter().enumerate().filter(IsEqual(finder)).next(Unavailable)
+
+    def len(self) -> int:
+        return len(self.iterable)
 
     @tp.override
     def __repr__(self) -> str:
