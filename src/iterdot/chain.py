@@ -1113,7 +1113,7 @@ class Iter[T](Iterator[T]):
     def append[V](self, *values: V) -> Iter[T | V]:
         return Iter(it.chain(self, values))
 
-    def flatten_once[T1](self: Iter[Iterable[T1]]) -> Iter[T1]:
+    def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
@@ -1631,8 +1631,8 @@ class SeqIter[T](Sequence[T]):
         Example:
             >>> SeqIter([("a", 0), ("b", 1)]).feed_into(dict)
             {'a': 0, 'b': 1}
-            >>> SeqIter([1, 2, 3, 4]).sum(start=10)
-            20
+            >>> SeqIter([1, 2, 3, 4]).feed_into(sum)
+            10
         """
         return func(self, *args, **kwargs)
 
@@ -1705,7 +1705,7 @@ if __name__ == "__main__":
         .collect[SeqIter[int]]()
     )
 
-    minmax_info = qualified.enumerate().minmax()
+    minmax_info = qualified.iter().enumerate().collect().minmax()
     statistics = qualified.stats()
     # fmt: on
 
