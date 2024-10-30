@@ -1739,6 +1739,20 @@ class SeqIter[T](Sequence[T]):
     def to_list(self) -> list[T]:
         return list(self.iterable)
 
+    @tp.no_type_check
+    def sorted[TComp: Comparable](
+        self, *, reverse: bool = False, key: Callable[[TComp], Comparable] | None
+    ) -> SeqIter[TComp]:
+        """
+        See builtin `sorted`
+
+        Returns:
+            sorted SeqIter
+        """
+        if key is not None:
+            return SeqIter(sorted(self, reverse=reverse, key=key))
+        return SeqIter(sorted(self, reverse=reverse))
+
     @tp.override
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(iterable={self.iterable!r})"
