@@ -259,20 +259,20 @@ class Iter[T](Iterator[T]):
         return Collector[T](self)
 
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
         """calculate the max element in the iterable.
@@ -314,20 +314,20 @@ class Iter[T](Iterator[T]):
             raise ValueError("max() iterable argument is empty") from None
 
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
         """calculate the min element in the iterable.
@@ -369,20 +369,20 @@ class Iter[T](Iterator[T]):
             raise ValueError("min() iterable argument is empty") from None
 
     @tp.overload
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]: ...
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
         """Eagerly calculate min and max by loading the entire iterator in memory.
@@ -421,11 +421,11 @@ class Iter[T](Iterator[T]):
                 return MinMax(min(tup, key=key), max(tup, key=key))
 
     @tp.overload
-    def minmax_lazy[RComparable: Comparable](
+    def minmax_lazy(
         self,
         /,
         *,
-        key: Callable[[T], RComparable],
+        key: Callable[[T], Comparable],
     ) -> MinMax[T]: ...
     @tp.overload
     def minmax_lazy[TComparable: Comparable](
@@ -435,11 +435,11 @@ class Iter[T](Iterator[T]):
         key: None = None,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax_lazy[RComparable: Comparable, F](
+    def minmax_lazy[F](
         self,
         /,
         *,
-        key: Callable[[T], RComparable],
+        key: Callable[[T], Comparable],
         default: F,
     ) -> MinMax[T] | MinMax[F]: ...
     @tp.overload
@@ -1316,20 +1316,20 @@ class SeqIter[T](Sequence[T]):
         return enumerated
 
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
         return (
@@ -1339,20 +1339,20 @@ class SeqIter[T](Sequence[T]):
         )
 
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
         return (
@@ -1362,20 +1362,20 @@ class SeqIter[T](Sequence[T]):
         )
 
     @tp.overload
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]: ...
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
         match self.iterable, default:
