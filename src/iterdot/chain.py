@@ -26,6 +26,7 @@ class Default(enum.Enum):
     Unavailable = enum.auto()
 
 
+@tp.final
 class Collector[TIter]:
     def __init__(self, instance: Iterable[TIter]) -> None:
         self.instance = instance
@@ -85,6 +86,7 @@ class MethodKind[T]:
         return inner
 
 
+@tp.final
 class Iter[T](Iterator[T]):
     """
     Iterator over a given iterable, providing method chaining.
@@ -1214,6 +1216,7 @@ class Iter[T](Iterator[T]):
         return Iter(it.product(self, it1, it2))
 
 
+@tp.final
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         if not isinstance(iterable, SeqIter):
