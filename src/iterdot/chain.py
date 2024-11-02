@@ -238,17 +238,34 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
-    """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
-    """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
-
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
     """see itertools.takewhile"""
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
     """see itertools.dropwhile"""
+
+    def accumulate(
+        self, func: Callable[[T, T], T], *, initial: T | None = None
+    ) -> Iter[T]:
+        """
+        see itertools.accumulate
+
+        Returns:
+            Iter
+        """
+        return Iter(it.accumulate(self, func, initial=initial))
+
+    def slice(
+        self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
+    ) -> Iter[T]:
+        """
+        see itertools.islice
+
+        Returns:
+            Iter
+        """
+        return Iter(it.islice(self, start, stop, step))
 
     sum = MethodKind[T].consumer(sum)
     """see sum"""
