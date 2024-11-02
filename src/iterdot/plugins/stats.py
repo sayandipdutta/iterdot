@@ -33,6 +33,7 @@ class Stats[TNumber: (float, Decimal, Fraction) = float](tp.NamedTuple):
     quantiles: tuple[TNumber, TNumber, TNumber]
 
 
+@tp.final
 class stats[TNumber: (float, Decimal, Fraction) = float]:
     def __init__(self, iterable: Iterable[TNumber]) -> None:
         self.iterable = iterable

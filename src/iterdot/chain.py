@@ -5,7 +5,7 @@ import enum
 import itertools as it
 import typing as tp
 from collections import deque
-from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -26,6 +26,7 @@ class Default(enum.Enum):
     Unavailable = enum.auto()
 
 
+@tp.final
 class Collector[TIter]:
     def __init__(self, instance: Iterable[TIter]) -> None:
         self.instance = instance
@@ -85,6 +86,7 @@ class MethodKind[T]:
         return inner
 
 
+@tp.final
 class Iter[T](Iterator[T]):
     """
     Iterator over a given iterable, providing method chaining.
@@ -236,17 +238,34 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    accumulate = MethodKind[T].augmentor(it.accumulate)  # pyright: ignore[reportArgumentType]
-    """see itertools.accumulate"""
-    slice = MethodKind[T].augmentor(it.islice)  # pyright: ignore[reportArgumentType]
-    """see itertools.islice"""
     zip_with = MethodKind[T].augmentor(zip)
     """see zip"""
-
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
     """see itertools.takewhile"""
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
     """see itertools.dropwhile"""
+
+    def accumulate(
+        self, func: Callable[[T, T], T], *, initial: T | None = None
+    ) -> Iter[T]:
+        """
+        see itertools.accumulate
+
+        Returns:
+            Iter
+        """
+        return Iter(it.accumulate(self, func, initial=initial))
+
+    def slice(
+        self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
+    ) -> Iter[T]:
+        """
+        see itertools.islice
+
+        Returns:
+            Iter
+        """
+        return Iter(it.islice(self, start, stop, step))
 
     sum = MethodKind[T].consumer(sum)
     """see sum"""
@@ -258,20 +277,20 @@ class Iter[T](Iterator[T]):
         return Collector[T](self)
 
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
         """calculate the max element in the iterable.
@@ -313,20 +332,20 @@ class Iter[T](Iterator[T]):
             raise ValueError("max() iterable argument is empty") from None
 
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
         """calculate the min element in the iterable.
@@ -368,20 +387,20 @@ class Iter[T](Iterator[T]):
             raise ValueError("min() iterable argument is empty") from None
 
     @tp.overload
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]: ...
-    def minmax_eager[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax_eager[TComparable: Comparable, F](
         self: Iter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
         """Eagerly calculate min and max by loading the entire iterator in memory.
@@ -420,11 +439,11 @@ class Iter[T](Iterator[T]):
                 return MinMax(min(tup, key=key), max(tup, key=key))
 
     @tp.overload
-    def minmax_lazy[RComparable: Comparable](
+    def minmax_lazy(
         self,
         /,
         *,
-        key: Callable[[T], RComparable],
+        key: Callable[[T], Comparable],
     ) -> MinMax[T]: ...
     @tp.overload
     def minmax_lazy[TComparable: Comparable](
@@ -434,11 +453,11 @@ class Iter[T](Iterator[T]):
         key: None = None,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax_lazy[RComparable: Comparable, F](
+    def minmax_lazy[F](
         self,
         /,
         *,
-        key: Callable[[T], RComparable],
+        key: Callable[[T], Comparable],
         default: F,
     ) -> MinMax[T] | MinMax[F]: ...
     @tp.overload
@@ -842,7 +861,7 @@ class Iter[T](Iterator[T]):
             >>> Iter([0, 1, 2, 3]).head(5).to_list()
             [0, 1, 2, 3]
         """
-        return self.slice(n)
+        return self.slice(stop=n)
 
     def skip(self, n: int) -> Iter[T]:
         """Advance the iterator n positions.
@@ -857,7 +876,7 @@ class Iter[T](Iterator[T]):
             >>> Iter([1, 2, 3, 4]).skip(2).to_list()
             [3, 4]
         """
-        return self if not n else self.slice(n, None)
+        return self if not n else self.slice(start=n, stop=None)
 
     def exhaust(self) -> None:
         """Exhaust all items in self. Could be used for side-effects.
@@ -1205,6 +1224,9 @@ class Iter[T](Iterator[T]):
             self = self.concat(fill())
         return self.sliding_window(n)
 
+    def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        return Iter(it.product(self, other))
+
     def collect_in[R, **P](
         self,
         container: Callable[tp.Concatenate[Iterable[T], P], R],
@@ -1224,7 +1246,13 @@ class Iter[T](Iterator[T]):
         """
         return container(self, *args, **kwargs)
 
+    def product3[T2, T3](
+        self, it1: Iterable[T2], it2: Iterable[T3]
+    ) -> Iter[tuple[T, T2, T3]]:
+        return Iter(it.product(self, it1, it2))
 
+
+@tp.final
 class SeqIter[T](Sequence[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         if not isinstance(iterable, SeqIter):
@@ -1268,36 +1296,20 @@ class SeqIter[T](Sequence[T]):
         return Iter(reversed(self.iterable))
 
     @tp.overload
-    def enumerate(
-        self, *, indexed: tp.Literal[False], start: int = 0
-    ) -> SeqIter[tuple[int, T]]: ...
-    @tp.overload
-    def enumerate(
-        self, *, indexed: tp.Literal[True] = True, start: int = 0
-    ) -> SeqIter[Indexed[T]]: ...
-    def enumerate(
-        self, *, indexed: bool = True, start: int = 0
-    ) -> SeqIter[tuple[int, T]] | SeqIter[Indexed[T]]:
-        enumerated = SeqIter(enumerate(self.iterable, start=start))
-        if indexed:
-            return enumerated.starmap(Indexed)
-        return enumerated
-
-    @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
-    def max[TComparable: Comparable, RComparable: Comparable, F](
+    def max[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
         return (
@@ -1307,20 +1319,20 @@ class SeqIter[T](Sequence[T]):
         )
 
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
-    def min[TComparable: Comparable, RComparable: Comparable, F](
+    def min[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
         return (
@@ -1330,20 +1342,20 @@ class SeqIter[T](Sequence[T]):
         )
 
     @tp.overload
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> MinMax[TComparable]: ...
     @tp.overload
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]: ...
-    def minmax[TComparable: Comparable, RComparable: Comparable, F](
+    def minmax[TComparable: Comparable, F](
         self: SeqIter[TComparable],
-        key: Callable[[TComparable], RComparable] | None = None,
+        key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
         match self.iterable, default:
@@ -1440,55 +1452,6 @@ class SeqIter[T](Sequence[T]):
             return any(self)
         return self.map(predicate).any()
 
-    def all_equal(self) -> bool:
-        """
-        Check if all elements are equal to each other.
-
-        If self is empty, return True.
-
-        Returns:
-            bool: Whether all the items were equal.
-
-        Example:
-            >>> SeqIter([True] * 5).all_equal()
-            True
-            >>> SeqIter(range(5)).all_equal()
-            False
-            >>> SeqIter(()).all_equal()
-            True
-        """
-        match self.iterable:
-            case () | (_,):
-                return True
-            case _:
-                first = self.iterable[0]
-                return all(first == item for item in self)
-
-    def all_equal_with(self, value: T | None = None) -> bool:
-        """
-        Check if all elements are equal to the given `value`.
-
-        If self is empty, return False.
-
-        Returns:
-            bool: Whether all the items were equal to `value`.
-
-        Example:
-            >>> SeqIter([2] * 5).all_equal_with(2)
-            True
-            >>> SeqIter(range(5)).all_equal_with(2)
-            False
-            >>> SeqIter(()).all_equal_with(2)
-            False
-        """
-        match self.iterable:
-            case ():
-                return False
-            case (first,):
-                return first == value
-            case _:
-                return all(value == item for item in self)
-
     def collect_in[R, **P](
         self,
         func: Callable[tp.Concatenate[Iterable[T], P], R],
@@ -1496,20 +1459,6 @@ class SeqIter[T](Sequence[T]):
         **kwargs: P.kwargs,
     ) -> R:
         return func(self, *args, **kwargs)
-
-    def filter(
-        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
-    ) -> SeqIter[T]:
-        return (
-            SeqIter(it.filterfalse(predicate, self.iterable))
-            if invert
-            else SeqIter(filter(predicate, self.iterable))
-        )
-
-    def starmap[*Ts, R](
-        self: SeqIter[tuple[*Ts]], func: Callable[[*Ts], R]
-    ) -> SeqIter[R]:
-        return SeqIter(it.starmap(func, self))
 
     @tp.overload
     def first[TDefault](
@@ -1552,8 +1501,10 @@ class SeqIter[T](Sequence[T]):
     def skip(self, n: int) -> SeqIter[T]:
         return SeqIter(self[n:])
 
-    def foreach(self, func: Callable[[T], None]) -> None:
-        self.iter().foreach(func)
+    def slice(
+        self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
+    ) -> SeqIter[T]:
+        return SeqIter(self.iterable[start:stop:step])
 
     @staticmethod
     def _get_skip_take_selectors(
@@ -1716,13 +1667,35 @@ class SeqIter[T](Sequence[T]):
         Example:
             >>> SeqIter([("a", 0), ("b", 1)]).feed_into(dict)
             {'a': 0, 'b': 1}
-            >>> SeqIter([1, 2, 3, 4]).feed_into(sum)
-            10
+            >>> SeqIter([1, 2, 3, 4]).feed_into(sum, start=10)
+            20
         """
         return func(self, *args, **kwargs)
 
     def to_list(self) -> list[T]:
         return list(self.iterable)
+
+    def len(self) -> int:
+        return len(self.iterable)
+
+    def sorted[TComp: Comparable, RComp: Comparable](
+        self: SeqIter[TComp],
+        *,
+        reverse: bool = False,
+        key: Callable[[TComp], RComp] | None = None,
+    ) -> SeqIter[TComp]:
+        return SeqIter(sorted(self, reverse=reverse, key=key))
+
+    def inspect(self, func: Callable[[T], object], *, debug: bool = False) -> SeqIter[T]:
+        def inner() -> Generator[T]:
+            for item in self:
+                if debug:
+                    breakpoint()
+                _ = func(item)
+                del _
+                yield item
+
+        return SeqIter(inner())
 
     @tp.override
     def __repr__(self) -> str:
@@ -1773,7 +1746,7 @@ if __name__ == "__main__":
         .collect[SeqIter[int]]()
     )
 
-    minmax_info = qualified.enumerate().minmax()
+    minmax_info = qualified.iter().enumerate().collect().minmax()
     statistics = qualified.stats()
     # fmt: on
 

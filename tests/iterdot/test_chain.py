@@ -1,3 +1,4 @@
+# pyright: reportArgumentType=false, reportCallIssue=false
 import itertools as itl
 from collections import deque
 from collections.abc import Iterable
@@ -133,20 +134,21 @@ def test_accumulate():
 
 
 def test_slice(integers_from_0_to_1000: list[int]):
-    assert Iter(integers_from_0_to_1000).slice(2).to_list() == [0, 1]
-    assert Iter(integers_from_0_to_1000).slice(2, 5).to_list() == [2, 3, 4]
+    assert Iter(integers_from_0_to_1000).slice(stop=2).to_list() == [0, 1]
+    assert Iter(integers_from_0_to_1000).slice(start=2, stop=5).to_list() == [2, 3, 4]
     assert (
-        Iter(integers_from_0_to_1000).slice(0, None).to_list() == integers_from_0_to_1000
+        Iter(integers_from_0_to_1000).slice(start=0, stop=None).to_list()
+        == integers_from_0_to_1000
     )
-    assert Iter(integers_from_0_to_1000).slice(0, None, 100).to_list() == list(
-        range(0, 1001, 100)
-    )
+    assert Iter(integers_from_0_to_1000).slice(
+        start=0, stop=None, step=100
+    ).to_list() == list(range(0, 1001, 100))
     with pytest.raises(ValueError, match="None|integer"):
-        _ = Iter(integers_from_0_to_1000).slice(-1).to_list()
+        _ = Iter(integers_from_0_to_1000).slice(stop=-1).to_list()
     with pytest.raises(ValueError, match="None|integer"):
-        _ = Iter(integers_from_0_to_1000).slice(0, -1).to_list()
+        _ = Iter(integers_from_0_to_1000).slice(start=0, stop=-1).to_list()
     with pytest.raises(ValueError, match="None|integer"):
-        _ = Iter(integers_from_0_to_1000).slice(0, 5, -1).to_list()
+        _ = Iter(integers_from_0_to_1000).slice(start=0, stop=5, step=-1).to_list()
 
 
 def test_zip_with():
