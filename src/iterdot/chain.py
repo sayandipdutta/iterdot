@@ -861,7 +861,7 @@ class Iter[T](Iterator[T]):
             >>> Iter([0, 1, 2, 3]).head(5).to_list()
             [0, 1, 2, 3]
         """
-        return self.slice(n)
+        return self.slice(stop=n)
 
     def skip(self, n: int) -> Iter[T]:
         """Advance the iterator n positions.
@@ -876,7 +876,7 @@ class Iter[T](Iterator[T]):
             >>> Iter([1, 2, 3, 4]).skip(2).to_list()
             [3, 4]
         """
-        return self if not n else self.slice(n, None)
+        return self if not n else self.slice(start=n, stop=None)
 
     def exhaust(self) -> None:
         """Exhaust all items in self. Could be used for side-effects.
