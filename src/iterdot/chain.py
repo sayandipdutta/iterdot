@@ -685,8 +685,8 @@ class Iter[T](Iterator[T]):
         Example:
             >>> Iter([("a", 0), ("b", 1)]).feed_into(dict)
             {'a': 0, 'b': 1}
-            >>> Iter([1, 2, 3, 4]).sum(start=10)
-            20
+            >>> Iter([1, 2, 3, 4]).feed_into(sum)
+            10
         """
         return func(self, *args, **kwargs)
 
@@ -1210,6 +1210,25 @@ class Iter[T](Iterator[T]):
     def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
         return Iter(it.product(self, other))
 
+    def collect_in[R, **P](
+        self,
+        container: Callable[tp.Concatenate[Iterable[T], P], R],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> R:
+        """
+        Similar to feed_into.
+
+        Args:
+            container: A callable that takes self as a whole and stores in a container
+            *args: args for the callable (if any)
+            **kwargs: kwargs for the callable (if any)
+
+        Returns:
+            container containing elements of the iterable.
+        """
+        return container(self, *args, **kwargs)
+
     def product3[T2, T3](
         self, it1: Iterable[T2], it2: Iterable[T3]
     ) -> Iter[tuple[T, T2, T3]]:
@@ -1611,9 +1630,6 @@ class SeqIter[T](Sequence[T]):
             self = SeqIter[T | F](self.iterable + fill)
         return self.sliding_window(n)
 
-    def to_list(self) -> list[T]:
-        return list(self.iterable)
-
     def feed_into[R, **P](
         self,
         func: Callable[tp.Concatenate[Iterable[T], P], R],
@@ -1634,10 +1650,13 @@ class SeqIter[T](Sequence[T]):
         Example:
             >>> SeqIter([("a", 0), ("b", 1)]).feed_into(dict)
             {'a': 0, 'b': 1}
-            >>> SeqIter([1, 2, 3, 4]).feed_into(sum)
-            10
+            >>> SeqIter([1, 2, 3, 4]).feed_into(sum, start=10)
+            20
         """
         return func(self, *args, **kwargs)
+
+    def to_list(self) -> list[T]:
+        return list(self.iterable)
 
     def len(self) -> int:
         return len(self.iterable)
