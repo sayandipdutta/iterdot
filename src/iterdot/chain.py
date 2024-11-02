@@ -1650,9 +1650,11 @@ class SeqIter[T](Sequence[T]):
     ) -> SeqIter[TComp]:
         return SeqIter(sorted(self, reverse=reverse, key=key))
 
-    def inspect(self, func: Callable[[T], object]) -> SeqIter[T]:
+    def inspect(self, func: Callable[[T], object], *, debug: bool = False) -> SeqIter[T]:
         def inner() -> Generator[T]:
             for item in self:
+                if debug:
+                    breakpoint()
                 _ = func(item)
                 del _
                 yield item
