@@ -6,6 +6,7 @@ import itertools as it
 import typing as tp
 from collections import deque
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
+from contextlib import suppress
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -1124,23 +1125,92 @@ class Iter[T](Iterator[T]):
         return stats[TNumber](self)
 
     def map_type[R](self, type: type[R]) -> Iter[R]:
+        """Convert each element to the specified type.
+
+        Args:
+            type: The type to convert elements to
+
+        Returns:
+            Iter: Iterator with elements converted to the specified type
+
+        Example:
+            >>> Iter(['1', '2', '3']).map_type(int).to_list()
+            [1, 2, 3]
+        """
         return self.map(type)
 
     def prepend[V](self, *values: V) -> Iter[T | V]:
+        """Prepend values to the beginning of the iterator.
+
+        Args:
+            *values: Values to prepend
+
+        Returns:
+            Iter: Iterator with values prepended
+
+        Example:
+            >>> Iter([3, 4]).prepend(1, 2).to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain(values, self))
 
     def append[V](self, *values: V) -> Iter[T | V]:
+        """Append values to the end of the iterator.
+
+        Args:
+            *values: Values to append
+
+        Returns:
+            Iter: Iterator with values appended
+
+        Example:
+            >>> Iter([1, 2]).append(3, 4).to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain(self, values))
 
     def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
+        """Flatten one level of nesting in sequences.
+
+        Returns:
+            Iter: Iterator with one level of nesting removed
+
+        Example:
+            >>> Iter([[1, 2], [3, 4]]).flatten_once().to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
+        """Recursively flatten nested sequences.
+
+        Returns:
+            Iter: Iterator with all nesting removed
+
+        Example:
+            >>> Iter([1, [2, [3, 4]], 5]).flatten().to_list()
+            [1, 2, 3, 4, 5]
+        """
         return Iter(flatten(self))
 
     def concat[R](
         self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
     ) -> Iter[T | R]:
+        """Concatenate multiple iterables with this iterator.
+
+        Args:
+            *its: Iterables to concatenate
+            self_position: Where to place this iterator - "front" or "back"
+
+        Returns:
+            Iter: Iterator with all iterables concatenated
+
+        Example:
+            >>> Iter([1, 2]).concat([3, 4], [5, 6]).to_list()
+            [1, 2, 3, 4, 5, 6]
+            >>> Iter([1, 2]).concat([3, 4], self_position="back").to_list()
+            [3, 4, 1, 2]
+        """
         match self_position:
             case "front":
                 return Iter(it.chain(self._iter, *its))
@@ -1158,6 +1228,25 @@ class Iter[T](Iterator[T]):
     def enumerate(
         self, *, indexed: bool = True, start: int = 0
     ) -> Iter[tuple[int, T]] | Iter[Indexed[T]]:
+        """Enumerate the items in the iterator, optionally wrapping them in Indexed objects.
+
+        Args:
+            indexed: If True, returns Indexed objects containing index and value.
+                    If False, returns (index, value) tuples. (default: True)
+            start: The starting value for enumeration (default: 0)
+
+        Returns:
+            Iter[tuple[int, T]] if indexed=False: Iterator of (index, value) tuples
+            Iter[Indexed[T]] if indexed=True: Iterator of Indexed objects
+
+        Example:
+            >>> Iter(['a', 'b', 'c']).enumerate(indexed=True).to_list()
+            [Indexed(idx=0, value='a'), Indexed(idx=1, value='b'), Indexed(idx=2, value='c')]
+            >>> Iter(['a', 'b', 'c']).enumerate(indexed=False).to_list()
+            [(0, 'a'), (1, 'b'), (2, 'c')]
+            >>> Iter(['a', 'b', 'c']).enumerate(start=1).to_list()
+            [Indexed(idx=1, value='a'), Indexed(idx=2, value='b'), Indexed(idx=3, value='c')]
+        """
         enumerated = Iter(enumerate(self._iter, start=start))
         if indexed:
             return enumerated.starmap(Indexed)
@@ -1225,6 +1314,18 @@ class Iter[T](Iterator[T]):
         return self.sliding_window(n)
 
     def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        """Calculate the cartesian product with another iterable.
+
+        Args:
+            other: Iterable to calculate product with
+
+        Returns:
+            Iter: Iterator over tuples containing cartesian product
+
+        Example:
+            >>> Iter([1, 2]).product_with(['a', 'b']).to_list()
+            [(1, 'a'), (1, 'b'), (2, 'a'), (2, 'b')]
+        """
         return Iter(it.product(self, other))
 
     def collect_in[R, **P](
@@ -1249,6 +1350,19 @@ class Iter[T](Iterator[T]):
     def product3[T2, T3](
         self, it1: Iterable[T2], it2: Iterable[T3]
     ) -> Iter[tuple[T, T2, T3]]:
+        """Calculate the cartesian product with two other iterables.
+
+        Args:
+            it1: First iterable to calculate product with
+            it2: Second iterable to calculate product with
+
+        Returns:
+            Iter: Iterator over tuples containing cartesian product
+
+        Example:
+            >>> Iter([1]).product3(['a', 'b'], [True, False]).to_list()
+            [(1, 'a', True), (1, 'a', False), (1, 'b', True), (1, 'b', False)]
+        """
         return Iter(it.product(self, it1, it2))
 
 
@@ -1367,6 +1481,15 @@ class SeqIter[T](Sequence[T]):
                 return MinMax(min(tup, key=key), max(tup, key=key))
 
     def iter(self) -> Iter[T]:
+        """Convert this SeqIter into an Iter.
+
+        Returns:
+            Iter[T]: A new Iter containing the same elements
+
+        Example:
+            >>> SeqIter([1, 2, 3]).iter().to_list()
+            [1, 2, 3]
+        """
         return Iter(self.iterable)
 
     def map_partial[R, **P](
@@ -1375,25 +1498,73 @@ class SeqIter[T](Sequence[T]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> SeqIter[R]:
+        """Map a function with partial arguments over each element.
+
+        Args:
+            func: Callable to apply to each element
+            *args: Positional arguments to pass to func after each element
+            **kwargs: Keyword arguments to pass to func
+
+        Returns:
+            SeqIter[R]: New SeqIter with mapped values
+
+        Example:
+            >>> SeqIter(["1", "10", "11"]).map_partial(int, base=2).to_list()
+            [1, 2, 3]
+        """
         return SeqIter(func(item, *args, **kwargs) for item in self)
 
     @tp.overload
     def map[R](
         self,
         func: Callable[[T], R],
-    ) -> SeqIter[R]: ...
+    ) -> SeqIter[R]:
+        """Map a single-argument function over the sequence.
+
+        Args:
+            func: Function taking one argument to apply to each element
+
+        Returns:
+            SeqIter[R]: New sequence with function applied
+
+        Example:
+            >>> SeqIter([1, 2, 3]).map(str).to_list()
+            ['1', '2', '3']
+        """
+        ...
+
     @tp.overload
     def map[K, _, R](
         self,
         func: Callable[tp.Concatenate[T, _, ...], R],
         *args: Iterable[K],
-    ) -> SeqIter[R]: ...
+    ) -> SeqIter[R]:
+        """Map a multi-argument function over multiple sequences in parallel.
+
+        Args:
+            func: Function taking multiple arguments
+            *args: Additional iterables to map over in parallel
+
+        Returns:
+            SeqIter[R]: New sequence with function applied
+
+        Example:
+            >>> SeqIter([1, 2]).map(pow, [2, 3]).to_list()
+            [1, 8]
+        """
+        ...
+
     def map[K, R](
         self,
         func: Callable[tp.Concatenate[T, ...], R],
         *args: Iterable[K],
     ) -> SeqIter[R]:
-        return SeqIter(map(func, self, *args))
+        """Map a function over the sequence.
+
+        This is a unified implementation for both single and multi-argument mapping.
+        See the overload signatures for specific documentation.
+        """
+        return SeqIter(map(func, self, *args))  # noqa: DOC201
 
     def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
         """
@@ -1454,11 +1625,27 @@ class SeqIter[T](Sequence[T]):
 
     def collect_in[R, **P](
         self,
-        func: Callable[tp.Concatenate[Iterable[T], P], R],
+        container: Callable[tp.Concatenate[Iterable[T], P], R],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> R:
-        return func(self, *args, **kwargs)
+        """Collect elements into a container using the provided function.
+
+        Args:
+            container: Function that takes an iterable and returns a container
+            *args: Additional positional arguments for func
+            **kwargs: Additional keyword arguments for func
+
+        Returns:
+            R: Result of applying func to the sequence
+
+        Example:
+            >>> SeqIter([1, 2, 3]).collect_in(list)
+            [1, 2, 3]
+            >>> SeqIter([1, 2, 3]).collect_in(sum)
+            6
+        """
+        return container(self, *args, **kwargs)
 
     @tp.overload
     def first[TDefault](
@@ -1467,9 +1654,34 @@ class SeqIter[T](Sequence[T]):
     @tp.overload
     def first[TDefault](self, default: TDefault) -> T | TDefault: ...
     def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
-        if self:
+        """Return the first element of the sequence.
+
+        Args:
+            default: Value to return if sequence is empty.
+                    If NoDefault, raises IndexError for empty sequence.
+                    Default is Exhausted.
+
+        Returns:
+            T | TDefault: First element or default value
+
+        Raises:
+            IndexError: If sequence is empty and default is NoDefault
+
+        Example:
+            >>> SeqIter([1, 2, 3]).first()
+            1
+            >>> SeqIter([]).first(default=0)
+            0
+            >>> SeqIter([]).first(default=NoDefault)
+            Traceback (most recent call last):
+                ...
+            IndexError: ...
+        """
+        with suppress(IndexError):
             return self[0]
-        return self[0] if default is NoDefault else default
+        if default is not NoDefault:
+            return default
+        raise IndexError("iterable is empty, and no default specified for first.")
 
     # TODO: support getitem
     @tp.overload
@@ -1479,31 +1691,117 @@ class SeqIter[T](Sequence[T]):
     @tp.overload
     def at[TDefault](self, n: int, default: TDefault) -> T | TDefault: ...
     def at[TDefault](self, n: int, default: TDefault = Exhausted) -> T | TDefault:
-        try:
+        """Return the element at index n.
+
+        Args:
+            n: Index of element to return
+            default: Value to return if index is out of bounds.
+                    If NoDefault, raises IndexError for invalid index.
+                    Default is Exhausted.
+
+        Returns:
+            T | TDefault: Element at index n or default value
+
+        Raises:
+            IndexError: If index is out of bounds and default is NoDefault
+
+        Example:
+            >>> SeqIter([1, 2, 3]).at(1)
+            2
+            >>> SeqIter([1, 2, 3]).at(5, default=0)
+            0
+            >>> SeqIter([1, 2, 3]).at(5, default=NoDefault)
+            Traceback (most recent call last):
+                ...
+            IndexError: ...
+        """
+        with suppress(IndexError):
             return self[n]
-        except IndexError:
-            if default is NoDefault:
-                raise
+        if default is not NoDefault:
             return default
+        raise IndexError(f"index {n} is out of range for SeqIter of length {len(self)}")
 
     @tp.overload
     def last[TDefault](self, default: tp.Literal[Default.NoDefault] = NoDefault) -> T: ...
     @tp.overload
     def last[TDefault](self, default: TDefault) -> T | TDefault: ...
     def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
-        if self:
+        """Return the last element of the sequence.
+
+        Args:
+            default: Value to return if sequence is empty.
+                    If NoDefault, raises IndexError for empty sequence.
+                    Default is Exhausted.
+
+        Returns:
+            T | TDefault: Last element or default value
+
+        Raises:
+            IndexError: If sequence is empty and default is NoDefault
+
+        Example:
+            >>> SeqIter([1, 2, 3]).last()
+            3
+            >>> SeqIter([]).last(default=0)
+            0
+            >>> SeqIter([]).last(default=NoDefault)
+            Traceback (most recent call last):
+                ...
+            IndexError: ...
+        """
+        with suppress(IndexError):
             return self[-1]
-        return self[-1] if default is NoDefault else default
+        if default is not NoDefault:
+            return default
+        raise IndexError("iterable is empty, and no default specified for last.")
 
     def tail(self, n: int) -> SeqIter[T]:
+        """Return the last n elements.
+
+        Args:
+            n: Number of elements to return from the end
+
+        Returns:
+            SeqIter[T]: Last n elements
+
+        Example:
+            >>> SeqIter([1, 2, 3, 4]).tail(2).to_list()
+            [3, 4]
+        """
         return SeqIter(self[-n:])
 
     def skip(self, n: int) -> SeqIter[T]:
+        """Skip the first n elements.
+
+        Args:
+            n: Number of elements to skip from the start
+
+        Returns:
+            SeqIter[T]: Remaining elements after skipping
+
+        Example:
+            >>> SeqIter([1, 2, 3, 4]).skip(2).to_list()
+            [3, 4]
+        """
         return SeqIter(self[n:])
 
     def slice(
         self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
     ) -> SeqIter[T]:
+        """Slice the sequence with start:stop:step.
+
+        Args:
+            start: Starting index (default: 0)
+            stop: Ending index (default: None)
+            step: Step size (default: 1)
+
+        Returns:
+            SeqIter[T]: Sliced sequence
+
+        Example:
+            >>> SeqIter(range(10)).slice(start=2, stop=8, step=2).to_list()
+            [2, 4, 6]
+        """
         return SeqIter(self.iterable[start:stop:step])
 
     @staticmethod
@@ -1547,6 +1845,21 @@ class SeqIter[T](Sequence[T]):
 
     # TODO: consider default
     def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
+        """Reduce the sequence using a binary function.
+
+        Args:
+            func: Binary function to apply cumulatively
+            initial: Optional initial value (default: None)
+
+        Returns:
+            T: Result of reduction
+
+        Example:
+            >>> SeqIter([1, 2, 3, 4]).reduce(lambda x, y: x + y)
+            10
+            >>> SeqIter([1, 2, 3]).reduce(lambda x, y: x * y, initial=10)
+            60
+        """
         if initial is None:
             return reduce(func, self)
         return reduce(func, self, initial)
@@ -1556,6 +1869,18 @@ class SeqIter[T](Sequence[T]):
         *,
         strict: bool = False,
     ) -> SeqIter[TSized]:
+        """Transpose rows and columns of nested sequences.
+
+        Args:
+            strict: If True, raise ValueError if sequences have different lengths (default: False)
+
+        Returns:
+            SeqIter[TSized]: Transposed sequences
+
+        Example:
+            >>> SeqIter([(1, 2), (3, 4)]).transpose().to_list()
+            [(1, 3), (2, 4)]
+        """
         return SeqIter(zip(*self, strict=strict))
 
     @property
@@ -1565,14 +1890,56 @@ class SeqIter[T](Sequence[T]):
         return stats[TNumber](self)
 
     def prepend[V](self, *values: V) -> SeqIter[T | V]:
+        """Add values to the beginning of the sequence.
+
+        Args:
+            *values: Values to prepend
+
+        Returns:
+            SeqIter[T | V]: New sequence with values prepended
+
+        Example:
+            >>> SeqIter([3, 4]).prepend(1, 2).to_list()
+            [1, 2, 3, 4]
+        """
         return SeqIter(values + self.iterable)
 
     def append[V](self, *values: V) -> SeqIter[T | V]:
+        """Add values to the end of the sequence.
+
+        Args:
+            *values: Values to append
+
+        Returns:
+            SeqIter[T | V]: New sequence with values appended
+
+        Example:
+            >>> SeqIter([1, 2]).append(3, 4).to_list()
+            [1, 2, 3, 4]
+        """
         return SeqIter(self.iterable + values)
 
     def concat[R](
         self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
     ) -> SeqIter[T | R]:
+        """Concatenate multiple iterables with this sequence.
+
+        Args:
+            *its: Iterables to concatenate
+            self_position: Where to place this sequence - "front" or "back" (default: "front")
+
+        Returns:
+            SeqIter[T | R]: New sequence with all iterables concatenated
+
+        Raises:
+            ValueError: If self_position is not "front" or "back"
+
+        Example:
+            >>> SeqIter([1, 2]).concat([3, 4], [5, 6]).to_list()
+            [1, 2, 3, 4, 5, 6]
+            >>> SeqIter([1, 2]).concat([3, 4], self_position="back").to_list()
+            [3, 4, 1, 2]
+        """
         if self_position not in ["front", "back"]:
             raise ValueError(
                 f'`self_position` must be "front" or "back", got {self_position!r}'
@@ -1673,9 +2040,27 @@ class SeqIter[T](Sequence[T]):
         return func(self, *args, **kwargs)
 
     def to_list(self) -> list[T]:
+        """Convert the sequence to a list.
+
+        Returns:
+            list[T]: List containing all elements
+
+        Example:
+            >>> SeqIter([1, 2, 3]).to_list()
+            [1, 2, 3]
+        """
         return list(self.iterable)
 
     def len(self) -> int:
+        """Get the length of the sequence.
+
+        Returns:
+            int: Number of elements
+
+        Example:
+            >>> SeqIter([1, 2, 3]).len()
+            3
+        """
         return len(self.iterable)
 
     def sorted[TComp: Comparable, RComp: Comparable](
@@ -1684,9 +2069,41 @@ class SeqIter[T](Sequence[T]):
         reverse: bool = False,
         key: Callable[[TComp], RComp] | None = None,
     ) -> SeqIter[TComp]:
+        """Return a new sorted sequence.
+
+        Args:
+            reverse: If True, sort in descending order (default: False)
+            key: Function to extract comparison key (default: None)
+
+        Returns:
+            SeqIter[TComp]: New sorted sequence
+
+        Example:
+            >>> SeqIter([3, 1, 4, 2]).sorted().to_list()
+            [1, 2, 3, 4]
+            >>> SeqIter([3, 1, 4, 2]).sorted(reverse=True).to_list()
+            [4, 3, 2, 1]
+        """
         return SeqIter(sorted(self, reverse=reverse, key=key))
 
     def inspect(self, func: Callable[[T], object], *, debug: bool = False) -> SeqIter[T]:
+        """Apply a function to each element for inspection, without modifying the sequence.
+
+        Args:
+            func: Function to apply for inspection
+            debug: If True, break into debugger for each element (default: False)
+
+        Returns:
+            SeqIter[T]: Original sequence unchanged
+
+        Example:
+            >>> SeqIter([1, 2, 3]).inspect(print).to_list()
+            1
+            2
+            3
+            [1, 2, 3]
+        """
+
         def inner() -> Generator[T]:
             for item in self:
                 if debug:
