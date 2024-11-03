@@ -19,8 +19,8 @@ class MinMax[T](NamedTuple):
         return self.max - self.min
 
 
-def lazy_minmax_keyed[T, R: Comparable](
-    iterator: Iterator[T], key: Callable[[T], R]
+def lazy_minmax_keyed[T](
+    iterator: Iterator[T], key: Callable[[T], Comparable]
 ) -> MinMax[T]:
     min = max = next(iterator)
     for item in iterator:
