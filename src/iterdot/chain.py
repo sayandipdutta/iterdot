@@ -15,6 +15,7 @@ from operator import add, attrgetter
 from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
+from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
 from iterdot.wtyping import Comparable
 
@@ -103,6 +104,61 @@ class Iter[T](Iterator[T]):
         )
         self._last_yielded_value: T | tp.Literal[Default.Unavailable] = Unavailable
         self._last_yielded_index: int = -1
+
+    @tp.overload
+    @classmethod
+    def successor(
+        cls, start: T, *, producer: Callable[[T], T], window_size: None = None
+    ) -> Iter[T]: ...
+    @tp.overload
+    @classmethod
+    def successor(
+        cls, start: tuple[T], *, producer: Callable[[Iterable[T]], T], window_size: int
+    ) -> Iter[T]: ...
+    @classmethod
+    def successor(
+        cls,
+        start: T | tuple[T],
+        *,
+        producer: Callable[[T], T] | Callable[[Iterable[T]], T],
+        window_size: int | None = None,
+    ) -> Iter[T]:
+        """
+        Create an Iter from a producer function that creates the successive element from last value.
+
+        Args:
+            *start (*Ts): starting element(s)
+            producer (callable): function that creates new element based on previous value(s)
+
+        Returns:
+            Iter
+
+        Example:
+            >>> double = lambda x: 2 * x
+            >>> Iter.successor(1, producer=double).slice(stop=5).to_list()
+            [1, 2, 4, 8, 16]
+            >>> Iter.successor((0, 1), producer=sum, window_size=2).slice(stop=6).to_list()
+            [0, 1, 1, 2, 3, 5]
+        """
+
+        def gen() -> Generator[T]:
+            if window_size is None:
+                item = tp.cast(T, start)
+                func = tp.cast(Callable[[T], T], producer)
+                yield item
+                while True:
+                    yield (item := func(item))
+            else:
+                items = tp.cast(tuple[T, ...], start)
+                assert len(items) == window_size, "window_size != len(start)"
+                func = tp.cast(Callable[[Iterable[T]], T], producer)
+                window = deque(items, maxlen=len(items))
+                yield from window
+                while True:
+                    yield (item := func(window))
+                    window.append(item)
+
+        return Iter(gen())
 
     def peek_next_index(self) -> int:
         """Peek the next index that would be yielded, if there is element left to yield.
@@ -276,6 +332,31 @@ class Iter[T](Iterator[T]):
     @property
     def collect(self) -> Collector[T]:
         return Collector[T](self)
+
+    def find(
+        self, finder: Callable[[T], bool] | T
+    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        """
+        Find a value and its index in the iterable, either by passing the value to find or a callable
+
+        Args:
+            finder (T | callable): Either the value to find, or a callable that returns True for the item
+
+        Returns:
+            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).find(2)
+            Indexed(idx=1, value=2)
+            >>> Iter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
+            Indexed(idx=1, value=2)
+            >>> Iter([1, 2, 3, 4]).find(5)
+            <Default.Unavailable: 3>
+        """
+        if callable(finder):
+            finder = tp.cast(Callable[[T], bool], finder)
+            return self.enumerate().filter(lambda x: finder(x.value)).next(Unavailable)
+        return self.enumerate().filter(IsEqual(finder)).next(Unavailable)
 
     @tp.overload
     def max[TComparable: Comparable, F](
@@ -1098,6 +1179,37 @@ class Iter[T](Iterator[T]):
     ) -> Iter[tuple[T, T1, T2, T3]]:
         return Iter(zip(self, iter1, iter2, iter3, strict=strict))
 
+    def product_2[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of two iterables
+        """
+        return Iter(it.product(self, other))
+
+    def product_3[T2, T3](
+        self, it1: Iterable[T2], it2: Iterable[T3]
+    ) -> Iter[tuple[T, T2, T3]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of three iterables
+        """
+        return Iter(it.product(self, it1, it2))
+
+    def product_n[R](
+        self, *itbl: Iterable[R], repeat: int = 1
+    ) -> Iter[tuple[T | R, ...]]:
+        """
+        see itertools.product
+
+        Returns:
+            cartesian product of n iterables
+        """
+        return Iter(it.product(self, *itbl, repeat=repeat))
+
     def transpose_eager[TSized: Sized](
         self: Iter[TSized],
         *,
@@ -1347,6 +1459,97 @@ class Iter[T](Iterator[T]):
         """
         return container(self, *args, **kwargs)
 
+    def inspect[**P](
+        self,
+        func: Callable[tp.Concatenate[T, P], object],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> Iter[T]:
+        """
+        Applies a function `func` over all the elements, and returns the original self.
+
+        Args:
+            func (Callable): function to apply on each element.
+            *args (object): arguments to the function
+            **kwargs (object): keyword arguments to the function
+
+        Returns:
+            Iter[T]
+        """
+
+        def apply(itbl: Iter[T]) -> Generator[T]:
+            for item in itbl:
+                _ = func(item, *args, **kwargs)
+                yield item
+
+        return Iter(apply(self))
+
+    def groupby_true(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+        """
+        Given a predicate as key, return groups of consecutive items where key evaluates to True
+
+        Args:
+            key (callable): a predicate that is to be applied to items.
+
+        Returns:
+            Iter: consecutive iterable groups of items where predicate was true.
+
+        Example:
+            >>> Iter("...123..4..*&234").groupby_true(str.isdigit).map("".join).to_list()
+            ['123', '4', '234']
+        """
+        return Iter(item[1] for item in it.groupby(self, key) if item[0])
+
+    def groupby_false(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+        """
+        Given a predicate as key, return groups of consecutive items where key evaluates to False
+
+        Args:
+            key (callable): a predicate that is to be applied to items.
+
+        Returns:
+            Iter: consecutive iterable groups of items where predicate was false.
+
+        Example:
+            >>> Iter("...123..4..*&234").groupby_false(str.isdigit).map("".join).to_list()
+            ['...', '..', '..*&']
+        """
+        return Iter(item[1] for item in it.groupby(self, key) if not item[0])
+
+    def groupby(self, key: Callable[[T], bool]) -> Iter[tuple[bool, Iterable[T]]]:
+        """See itertools.groupby
+
+        Returns:
+            Iter of tuples, containing what the predicate evaluated to for that group, and the group
+        """
+        return Iter(it.groupby(self, key))
+
+    def filter_map[R](
+        self, predicate_apply: Callable[[T], tp.Literal[False] | R]
+    ) -> Iter[R]:
+        """
+        Map on filtered elements.
+
+        Args:
+            predicate_apply (callable): A callable that either evaluates to False or returns a value
+
+        Returns:
+            Iter[R]
+
+        Example:
+            >>> Iter([1, 2, 3, 4, 5, 6]).filter_map(lambda x: x % 2 == 0 and x ** 2).to_list()
+            [4, 16, 36]
+            >>> Iter([1, 2, 3, 4, 5, 6]).filter_map(lambda x: x % 2 == x % 3 and str(x)).to_list()
+            ['1', '6']
+        """
+
+        def apply() -> Generator[R]:
+            for item in self:
+                if res := predicate_apply(item):
+                    yield res
+
+        return Iter(apply())
+
     def product3[T2, T3](
         self, it1: Iterable[T2], it2: Iterable[T3]
     ) -> Iter[tuple[T, T2, T3]]:
@@ -1408,6 +1611,22 @@ class SeqIter[T](Sequence[T]):
 
     def reversed(self) -> Iter[T]:
         return Iter(reversed(self.iterable))
+
+    @tp.overload
+    def enumerate(
+        self, *, indexed: tp.Literal[False], start: int = 0
+    ) -> SeqIter[tuple[int, T]]: ...
+    @tp.overload
+    def enumerate(
+        self, *, indexed: tp.Literal[True] = True, start: int = 0
+    ) -> SeqIter[Indexed[T]]: ...
+    def enumerate(
+        self, *, indexed: bool = True, start: int = 0
+    ) -> SeqIter[tuple[int, T]] | SeqIter[Indexed[T]]:
+        enumerated = SeqIter(enumerate(self.iterable, start=start))
+        if indexed:
+            return enumerated.map(Unpacked(Indexed))
+        return enumerated
 
     @tp.overload
     def max[TComparable: Comparable, F](
@@ -2051,6 +2270,57 @@ class SeqIter[T](Sequence[T]):
         """
         return list(self.iterable)
 
+    def inspect[**P](
+        self,
+        func: Callable[tp.Concatenate[T, P], object],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> tp.Self:
+        """
+        Applies a function `func` over all the elements, and returns the original self.
+
+        Args:
+            func (Callable): function to apply on each element.
+            *args (object): arguments to the function
+            **kwargs (object): keyword arguments to the function
+
+        Returns:
+            Self
+        """
+        _ = self.map_partial(func, *args, **kwargs)
+        del _
+        return self
+
+    def find(
+        self, finder: Callable[[T], bool] | T
+    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        """
+        Find a value and its index in the iterable, either by passing the value to find or a callable
+
+        Args:
+            finder (T | callable): Either the value to find, or a callable that returns True for the item
+
+        Returns:
+            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+
+        Example:
+            >>> SeqIter([1, 2, 3, 4]).find(2)
+            Indexed(idx=1, value=2)
+            >>> SeqIter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
+            Indexed(idx=1, value=2)
+            >>> SeqIter([1, 2, 3, 4]).find(5)
+            <Default.Unavailable: 3>
+        """
+        if callable(finder):
+            finder = tp.cast(Callable[[T], bool], finder)
+            return (
+                self.iter()
+                .enumerate()
+                .filter(lambda x: finder(x.value))
+                .next(Unavailable)
+            )
+        return self.iter().enumerate().filter(IsEqual(finder)).next(Unavailable)
+
     def len(self) -> int:
         """Get the length of the sequence.
 
@@ -2086,30 +2356,16 @@ class SeqIter[T](Sequence[T]):
         """
         return SeqIter(sorted(self, reverse=reverse, key=key))
 
-    def inspect(self, func: Callable[[T], object], *, debug: bool = False) -> SeqIter[T]:
-        """Apply a function to each element for inspection, without modifying the sequence.
-
-        Args:
-            func: Function to apply for inspection
-            debug: If True, break into debugger for each element (default: False)
+    def debug(self) -> SeqIter[T]:
+        """Add a breakpoint on each iteration.
 
         Returns:
             SeqIter[T]: Original sequence unchanged
-
-        Example:
-            >>> SeqIter([1, 2, 3]).inspect(print).to_list()
-            1
-            2
-            3
-            [1, 2, 3]
         """
 
         def inner() -> Generator[T]:
             for item in self:
-                if debug:
-                    breakpoint()
-                _ = func(item)
-                del _
+                breakpoint()
                 yield item
 
         return SeqIter(inner())
