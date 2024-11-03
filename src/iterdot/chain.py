@@ -1124,23 +1124,92 @@ class Iter[T](Iterator[T]):
         return stats[TNumber](self)
 
     def map_type[R](self, type: type[R]) -> Iter[R]:
+        """Convert each element to the specified type.
+
+        Args:
+            type: The type to convert elements to
+
+        Returns:
+            Iter: Iterator with elements converted to the specified type
+
+        Example:
+            >>> Iter(['1', '2', '3']).map_type(int).to_list()
+            [1, 2, 3]
+        """
         return self.map(type)
 
     def prepend[V](self, *values: V) -> Iter[T | V]:
+        """Prepend values to the beginning of the iterator.
+
+        Args:
+            *values: Values to prepend
+
+        Returns:
+            Iter: Iterator with values prepended
+
+        Example:
+            >>> Iter([3, 4]).prepend(1, 2).to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain(values, self))
 
     def append[V](self, *values: V) -> Iter[T | V]:
+        """Append values to the end of the iterator.
+
+        Args:
+            *values: Values to append
+
+        Returns:
+            Iter: Iterator with values appended
+
+        Example:
+            >>> Iter([1, 2]).append(3, 4).to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain(self, values))
 
     def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
+        """Flatten one level of nesting in sequences.
+
+        Returns:
+            Iter: Iterator with one level of nesting removed
+
+        Example:
+            >>> Iter([[1, 2], [3, 4]]).flatten_once().to_list()
+            [1, 2, 3, 4]
+        """
         return Iter(it.chain.from_iterable(self))
 
     def flatten(self) -> Iter[object]:
+        """Recursively flatten nested sequences.
+
+        Returns:
+            Iter: Iterator with all nesting removed
+
+        Example:
+            >>> Iter([1, [2, [3, 4]], 5]).flatten().to_list()
+            [1, 2, 3, 4, 5]
+        """
         return Iter(flatten(self))
 
     def concat[R](
         self, *its: Iterable[R], self_position: tp.Literal["front", "back"] = "front"
     ) -> Iter[T | R]:
+        """Concatenate multiple iterables with this iterator.
+
+        Args:
+            *its: Iterables to concatenate
+            self_position: Where to place this iterator - "front" or "back"
+
+        Returns:
+            Iter: Iterator with all iterables concatenated
+
+        Example:
+            >>> Iter([1, 2]).concat([3, 4], [5, 6]).to_list()
+            [1, 2, 3, 4, 5, 6]
+            >>> Iter([1, 2]).concat([3, 4], self_position="back").to_list()
+            [3, 4, 1, 2]
+        """
         match self_position:
             case "front":
                 return Iter(it.chain(self._iter, *its))
@@ -1225,6 +1294,18 @@ class Iter[T](Iterator[T]):
         return self.sliding_window(n)
 
     def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+        """Calculate the cartesian product with another iterable.
+
+        Args:
+            other: Iterable to calculate product with
+
+        Returns:
+            Iter: Iterator over tuples containing cartesian product
+
+        Example:
+            >>> Iter([1, 2]).product_with(['a', 'b']).to_list()
+            [(1, 'a'), (1, 'b'), (2, 'a'), (2, 'b')]
+        """
         return Iter(it.product(self, other))
 
     def collect_in[R, **P](
@@ -1249,6 +1330,19 @@ class Iter[T](Iterator[T]):
     def product3[T2, T3](
         self, it1: Iterable[T2], it2: Iterable[T3]
     ) -> Iter[tuple[T, T2, T3]]:
+        """Calculate the cartesian product with two other iterables.
+
+        Args:
+            it1: First iterable to calculate product with
+            it2: Second iterable to calculate product with
+
+        Returns:
+            Iter: Iterator over tuples containing cartesian product
+
+        Example:
+            >>> Iter([1]).product3(['a', 'b'], [True, False]).to_list()
+            [(1, 'a', True), (1, 'a', False), (1, 'b', True), (1, 'b', False)]
+        """
         return Iter(it.product(self, it1, it2))
 
 
