@@ -13,7 +13,8 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
     for item in iterable:
         if isinstance(item, Iterable) and not isinstance(item, str):
             yield from flatten(cast(Iterable[object], item))
-        yield item
+        else:
+            yield item
 
 
 def skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
