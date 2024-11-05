@@ -1584,6 +1584,32 @@ class Iter[T](Iterator[T]):
         """
         return self.peek_next_value() is Exhausted
 
+    def flatmap[**P, R](
+        self,
+        func: Callable[tp.Concatenate[T, P], Sequence[R]],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> Iter[R]:
+        """Map a function that returns sequences and flatten the results.
+
+        This is equivalent to mapping the function and then calling flatten_once().
+
+        Args:
+            func: Function that takes an item and returns a sequence
+            *args: Additional positional arguments for func
+            **kwargs: Additional keyword arguments for func
+
+        Returns:
+            Iter[R]: Iterator over the flattened results
+
+        Example:
+            >>> Iter([1, 2]).flatmap(lambda x: [x, x*2]).to_list()
+            [1, 2, 2, 4]
+            >>> Iter(['ab', 'cd']).flatmap(list).to_list()
+            ['a', 'b', 'c', 'd']
+        """
+        return self.map_partial(func, *args, **kwargs).flatten_once()
+
 
 @tp.final
 class SeqIter[T](Sequence[T]):
