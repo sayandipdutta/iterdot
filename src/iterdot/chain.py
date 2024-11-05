@@ -1610,6 +1610,18 @@ class Iter[T](Iterator[T]):
         """
         return self.map_partial(func, *args, **kwargs).flatten_once()
 
+    def cycle(self) -> Iter[T]:
+        """Create an iterator that cycles through the elements infinitely.
+
+        Returns:
+            Iter[T]: Iterator that repeats elements indefinitely
+
+        Example:
+            >>> Iter([1, 2, 3]).cycle().slice(stop=5).to_list()
+            [1, 2, 3, 1, 2]
+        """
+        return Iter(it.cycle(self))
+
 
 @tp.final
 class SeqIter[T](Sequence[T]):
