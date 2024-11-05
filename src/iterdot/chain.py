@@ -1568,6 +1568,22 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.product(self, it1, it2))
 
+    def is_empty(self) -> bool:
+        """
+        Check if the sequence Iter is empty
+
+        Returns:
+            True if empty, else False
+
+        Example:
+            >>> it = Iter([1, 2, 3])
+            >>> it.is_empty()
+            False
+            >>> it.to_list()
+            [1, 2, 3]
+        """
+        return self.peek_next_value() is Exhausted
+
 
 @tp.final
 class SeqIter[T](Sequence[T]):
@@ -2369,6 +2385,19 @@ class SeqIter[T](Sequence[T]):
                 yield item
 
         return SeqIter(inner())
+
+    def is_empty(self) -> bool:
+        """
+        Check if the sequence Iter is empty
+
+        Returns:
+            True if empty, else False
+
+        Example:
+            >>> SeqIter([1, 2, 3]).is_empty()
+            False
+        """
+        return not bool(self.iterable)
 
     @tp.override
     def __repr__(self) -> str:
