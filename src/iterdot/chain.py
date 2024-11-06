@@ -1074,7 +1074,7 @@ class Iter[T](Iterator[T]):
     @tp.overload
     def reduce[I](self, func: Callable[[I, T], I], initial: I) -> I: ...
     @tp.no_type_check
-    def reduce[I](self, func, initial=None):
+    def reduce(self, func, initial=None):
         """Reduce the sequence using a binary function.
 
         Args:
