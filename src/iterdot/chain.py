@@ -1045,15 +1045,77 @@ class Iter[T](Iterator[T]):
         self: tp.Self | Iter[Iterable[K1]],
         iterable: Iterable[Iterable[K2]] | None = None,
     ) -> Iter[K1] | Iter[T | K2]:
+        """Chain multiple iterables together by flattening them.
+
+        This method has two modes of operation:
+        1. When iterable=None: Flattens self when self contains iterables
+        2. When iterable is provided: Chains self with the flattened iterable
+
+        Args:
+            iterable: Optional iterable of iterables to chain with self.
+                     If None, flattens self instead.
+
+        Returns:
+            Iter: Iterator over chained/flattened elements
+
+        Example:
+            >>> Iter([[1, 2], [3, 4]]).chain_from_iter().to_list()
+            [1, 2, 3, 4]
+            >>> Iter([1, 2]).chain_from_iter([[3, 4], [5, 6]]).to_list()
+            [1, 2, 3, 4, 5, 6]
+        """
         if iterable is None:
             return Iter(it.chain.from_iterable(tp.cast(Iter[Iterable[K1]], self)))
         return Iter(it.chain(tp.cast(Iter[T], self), it.chain.from_iterable(iterable)))
 
     # TODO: consider default
-    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
+    @tp.overload
+    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T: ...
+    @tp.overload
+    def reduce[I](self, func: Callable[[I, T], I], initial: I) -> I: ...
+    @tp.no_type_check
+    def reduce(self, func, initial=None):
+        """Reduce the sequence using a binary function.
+
+        Args:
+            func: Binary function to apply cumulatively to the items
+            initial: Optional initial value to start the reduction (default: None)
+
+        Returns:
+            T: Result of reduction
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).reduce(lambda x, y: x + y)
+            10
+            >>> Iter([1, 2, 3]).reduce(lambda x, y: x * y, initial=10)
+            60
+            >>> Iter([]).reduce(lambda x, y: x + y, initial=0)
+            0
+            >>> Iter([]).reduce(lambda x, y: x + y)
+            Traceback (most recent call last):
+                ...
+            TypeError: reduce() of empty iterable with no initial value
+        """
         if initial is None:
             return reduce(func, list(self))
         return reduce(func, list(self), initial)
+
+    def zip_longest[R, F](
+        self, other: Iterable[R], fillvalue: F = None
+    ) -> Iter[tuple[T | F, R | F]]:
+        """
+        See itertools.zip_longest
+
+        Returns:
+            two iterables zipped together with missing values replaced with fillvalue.
+
+        Example:
+            >>> Iter(range(5)).zip_longest(range(3)).to_list()
+            [(0, 0), (1, 1), (2, 2), (3, None), (4, None)]
+            >>> Iter(range(5)).zip_longest(range(3), fillvalue="x").to_list()
+            [(0, 0), (1, 1), (2, 2), (3, 'x'), (4, 'x')]
+        """
+        return Iter(it.zip_longest(self, other, fillvalue=fillvalue))
 
     @tp.overload
     def zip2[T1](
