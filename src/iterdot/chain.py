@@ -7,6 +7,7 @@ import typing as tp
 from collections import deque
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from contextlib import suppress
+from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -26,6 +27,31 @@ class Default(enum.Enum):
     Exhausted = enum.auto()
     NoDefault = enum.auto()
     Unavailable = enum.auto()
+
+
+# enum MissingPolicy<T> {
+#     Shortest,
+#     Strict,
+#     Longest(T)
+# }
+
+
+@dataclass(frozen=True, slots=True)
+class Ignore: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Raise: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Fill[T]:
+    fillvalue: T
+
+
+IGNORE = Ignore()
+
+type MissingPolicy[T] = Ignore | Raise | Fill[T]
 
 
 @tp.final
@@ -295,8 +321,6 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    zip_with = MethodKind[T].augmentor(zip)
-    """see zip"""
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
     """see itertools.takewhile"""
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
@@ -1045,15 +1069,118 @@ class Iter[T](Iterator[T]):
         self: tp.Self | Iter[Iterable[K1]],
         iterable: Iterable[Iterable[K2]] | None = None,
     ) -> Iter[K1] | Iter[T | K2]:
+        """Chain multiple iterables together by flattening them.
+
+        This method has two modes of operation:
+        1. When iterable=None: Flattens self when self contains iterables
+        2. When iterable is provided: Chains self with the flattened iterable
+
+        Args:
+            iterable: Optional iterable of iterables to chain with self.
+                     If None, flattens self instead.
+
+        Returns:
+            Iter: Iterator over chained/flattened elements
+
+        Example:
+            >>> Iter([[1, 2], [3, 4]]).chain_from_iter().to_list()
+            [1, 2, 3, 4]
+            >>> Iter([1, 2]).chain_from_iter([[3, 4], [5, 6]]).to_list()
+            [1, 2, 3, 4, 5, 6]
+        """
         if iterable is None:
             return Iter(it.chain.from_iterable(tp.cast(Iter[Iterable[K1]], self)))
         return Iter(it.chain(tp.cast(Iter[T], self), it.chain.from_iterable(iterable)))
 
     # TODO: consider default
-    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
+    @tp.overload
+    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T: ...
+    @tp.overload
+    def reduce[I](self, func: Callable[[I, T], I], initial: I) -> I: ...
+    @tp.no_type_check
+    def reduce(self, func, initial=None):
+        """Reduce the sequence using a binary function.
+
+        Args:
+            func: Binary function to apply cumulatively to the items
+            initial: Optional initial value to start the reduction (default: None)
+
+        Returns:
+            T: Result of reduction
+
+        Example:
+            >>> Iter([1, 2, 3, 4]).reduce(lambda x, y: x + y)
+            10
+            >>> Iter([1, 2, 3]).reduce(lambda x, y: x * y, initial=10)
+            60
+            >>> Iter([]).reduce(lambda x, y: x + y, initial=0)
+            0
+            >>> Iter([]).reduce(lambda x, y: x + y)
+            Traceback (most recent call last):
+                ...
+            TypeError: reduce() of empty iterable with no initial value
+        """
         if initial is None:
             return reduce(func, list(self))
         return reduce(func, list(self), initial)
+
+    # fmt: off
+    @tp.overload
+    def zip[R](self: Iterable[T], other: Iterable[R], *, missing_policy: Ignore = IGNORE) -> Iter[tuple[T, R]]: ...
+    @tp.overload
+    def zip[R](self: Iterable[T], other: Iterable[R], *, missing_policy: Raise) -> Iter[tuple[T, R]]: ...
+    @tp.overload
+    def zip[R, F](self: Iterable[T], other: Iterable[R], *, missing_policy: Fill[F]) -> Iter[tuple[T | F, R | F]]: ...
+    # fmt: on
+    def zip[R, F](
+        self: Iterable[T],
+        other: Iterable[R],
+        *,
+        missing_policy: MissingPolicy[F] = IGNORE,
+    ) -> Iter[tuple[T, R]] | Iter[tuple[T | F, R | F]]:
+        """Zip two iterables together with configurable behavior for unequal lengths.
+
+        This method provides three strategies for handling iterables of unequal length:
+        1. Ignore (default): Stop when shortest iterable is exhausted
+        2. Raise: Raise an error if iterables have unequal length
+        3. Fill: Use a fill value to pad the shorter iterable
+
+        Args:
+            other: Second iterable to zip with
+            missing_policy: Policy for handling unequal length iterables:
+                - Ignore(): Stop when shortest exhausted (default)
+                - Raise(): Raise error if lengths unequal
+                - Fill(value): Pad shorter with value
+
+        Returns:
+            Iter[tuple[T, R]]: Zipped iterator pairs
+            Iter[tuple[T | F, R | F]]: Zipped pairs with fill value type when using Fill policy
+
+        Raises:
+            ValueError: If iterables have unequal length and if_unequal=Raise()
+                or missing_policy receives an unknown MissingPolicy
+
+        Example:
+            >>> Iter([1, 2]).zip([3, 4, 5]).to_list()
+            [(1, 3), (2, 4)]
+            >>> Iter([1]).zip([3, 4], missing_policy=Raise()).to_list()
+            Traceback (most recent call last):
+                ...
+            ValueError: zip() argument 2 is longer than argument 1
+            >>> Iter([1, 2]).zip([3], missing_policy=Fill(0)).to_list()
+            [(1, 3), (2, 0)]
+        """
+        match missing_policy:
+            case Raise():
+                return Iter(zip(self, other, strict=True))
+            case Ignore():
+                return Iter(zip(self, other, strict=False))
+            case Fill(fillvalue=fillvalue):
+                return Iter(it.zip_longest(self, other, fillvalue=fillvalue))
+
+        raise ValueError(  # pyright: ignore[reportUnreachable]
+            f"{missing_policy=} not recognized. Choices: Raise | Ignore | Fill"
+        )
 
     @tp.overload
     def zip2[T1](
