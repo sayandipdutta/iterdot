@@ -1,7 +1,6 @@
 # pyright: reportImportCycles=false
 from __future__ import annotations
 
-import enum
 import itertools as it
 import typing as tp
 from collections import deque
@@ -13,19 +12,12 @@ from functools import partial, reduce, wraps
 from operator import add, attrgetter
 
 from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
+from iterdot.defaults import Default, Exhausted, NoDefault, Unavailable
 from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
 from iterdot.wtyping import Comparable
-
-
-class Default(enum.Enum):
-    """Sentinel values used as defaults."""
-
-    Exhausted = enum.auto()
-    NoDefault = enum.auto()
-    Unavailable = enum.auto()
 
 
 @tp.final
@@ -43,12 +35,6 @@ class Collector[TIter]:
 
     def __call__(self) -> SeqIter[TIter]:
         return SeqIter(self.instance)
-
-
-# TODO: Replace with enum.global_enum if ever supported in pyright
-Exhausted: tp.Literal[Default.Exhausted] = Default.Exhausted
-NoDefault: tp.Literal[Default.NoDefault] = Default.NoDefault
-Unavailable: tp.Literal[Default.Unavailable] = Default.Unavailable
 
 
 class MethodKind[T]:
