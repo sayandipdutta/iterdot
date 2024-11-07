@@ -29,13 +29,6 @@ class Default(enum.Enum):
     Unavailable = enum.auto()
 
 
-# enum MissingPolicy<T> {
-#     Shortest,
-#     Strict,
-#     Longest(T)
-# }
-
-
 @dataclass(frozen=True, slots=True)
 class Ignore: ...
 
