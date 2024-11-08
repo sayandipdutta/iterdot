@@ -1461,7 +1461,11 @@ class Iter[T](Iterator[T]):
     # TODO: Consider complex padding: +ve int for left, -ve int for right, complex for left right
     @tp.overload
     def sliding_window(
-        self, n: int, *, fill_value: tp.Literal[Default.NoDefault] = NoDefault
+        self,
+        n: int,
+        *,
+        fill_value: tp.Literal[Default.NoDefault] = NoDefault,
+        stride: int = 1,
     ) -> Iter[tuple[T, ...]]: ...
     @tp.overload
     def sliding_window[F](
@@ -1469,6 +1473,7 @@ class Iter[T](Iterator[T]):
         n: int,
         *,
         fill_value: F,
+        stride: int = 1,
         pad: tp.Literal["left", "right", "both"] = "left",
     ) -> Iter[tuple[T | F, ...]]: ...
     def sliding_window[F](
@@ -1476,6 +1481,7 @@ class Iter[T](Iterator[T]):
         n: int,
         *,
         fill_value: F | tp.Literal[Default.NoDefault] = NoDefault,
+        stride: int = 1,
         pad: tp.Literal["left", "right", "both"] = "both",
     ) -> Iter[tuple[T, ...]] | Iter[tuple[T | F, ...]]:
         """
@@ -1507,7 +1513,7 @@ class Iter[T](Iterator[T]):
             [(0, 0, 1), (0, 1, 0), (1, 0, 0)]
         """
         if fill_value is NoDefault:
-            return Iter(sliding_window(self, n))
+            return Iter(sliding_window(self, n, stride=stride))
         if self.peek_next_value() is Exhausted:
             return Iter[tuple[T, ...]]()
 

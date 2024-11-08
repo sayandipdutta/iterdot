@@ -34,18 +34,19 @@ def skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-def sliding_window[T](it: Iterator[T] | Sequence[T], n: int) -> Iterable[tuple[T, ...]]:
-    window = deque[T](maxlen=n)
+def sliding_window[T](
+    it: Iterator[T] | Sequence[T], n: int, stride: int = 1
+) -> Iterable[tuple[T, ...]]:
+    assert isinstance(n, int)
+    assert isinstance(stride, int)
+    assert n > 0
+    assert stride > 0
+
     if isinstance(it, Iterator):
-        nitems = islice(it, n)
-        window.extend(nitems)
-        yield tuple(window)
-        for item in it:
-            window.append(item)
+        window = deque[T](islice(it, n), maxlen=n)
+        while window:
             yield tuple(window)
+            window.extend(islice(it, stride))
     else:
-        length = len(it)
-        for i in range(length):
-            yield tuple(it[i : i + n])
-            if length - i - 1 < n:
-                break
+        stop = max(0, (len(it) - n) // stride + 1)
+        yield from (tuple(it[i : i + n]) for i in range(0, stop, stride))
