@@ -7,6 +7,7 @@ import typing as tp
 from collections import deque
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from contextlib import suppress
+from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
 from functools import partial, reduce, wraps
@@ -26,6 +27,24 @@ class Default(enum.Enum):
     Exhausted = enum.auto()
     NoDefault = enum.auto()
     Unavailable = enum.auto()
+
+
+@dataclass(frozen=True, slots=True)
+class Ignore: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Raise: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Fill[T]:
+    fillvalue: T
+
+
+IGNORE = Ignore()
+
+type MissingPolicy[T] = Ignore | Raise | Fill[T]
 
 
 @tp.final
@@ -295,8 +314,6 @@ class Iter[T](Iterator[T]):
     """see itertools.pairwise"""
     batched = MethodKind[T].augmentor(it.batched)
     """see itertools.batched"""
-    zip_with = MethodKind[T].augmentor(zip)
-    """see zip"""
     takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
     """see itertools.takewhile"""
     dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
@@ -1100,22 +1117,63 @@ class Iter[T](Iterator[T]):
             return reduce(func, list(self))
         return reduce(func, list(self), initial)
 
-    def zip_longest[R, F](
-        self, other: Iterable[R], fillvalue: F = None
-    ) -> Iter[tuple[T | F, R | F]]:
-        """
-        See itertools.zip_longest
+    # fmt: off
+    @tp.overload
+    def zip[R](self: Iterable[T], other: Iterable[R], *, missing_policy: Ignore = IGNORE) -> Iter[tuple[T, R]]: ...
+    @tp.overload
+    def zip[R](self: Iterable[T], other: Iterable[R], *, missing_policy: Raise) -> Iter[tuple[T, R]]: ...
+    @tp.overload
+    def zip[R, F](self: Iterable[T], other: Iterable[R], *, missing_policy: Fill[F]) -> Iter[tuple[T | F, R | F]]: ...
+    # fmt: on
+    def zip[R, F](
+        self: Iterable[T],
+        other: Iterable[R],
+        *,
+        missing_policy: MissingPolicy[F] = IGNORE,
+    ) -> Iter[tuple[T, R]] | Iter[tuple[T | F, R | F]]:
+        """Zip two iterables together with configurable behavior for unequal lengths.
+
+        This method provides three strategies for handling iterables of unequal length:
+        1. Ignore (default): Stop when shortest iterable is exhausted
+        2. Raise: Raise an error if iterables have unequal length
+        3. Fill: Use a fill value to pad the shorter iterable
+
+        Args:
+            other: Second iterable to zip with
+            missing_policy: Policy for handling unequal length iterables:
+                - Ignore(): Stop when shortest exhausted (default)
+                - Raise(): Raise error if lengths unequal
+                - Fill(value): Pad shorter with value
 
         Returns:
-            two iterables zipped together with missing values replaced with fillvalue.
+            Iter[tuple[T, R]]: Zipped iterator pairs
+            Iter[tuple[T | F, R | F]]: Zipped pairs with fill value type when using Fill policy
+
+        Raises:
+            ValueError: If iterables have unequal length and if_unequal=Raise()
+                or missing_policy receives an unknown MissingPolicy
 
         Example:
-            >>> Iter(range(5)).zip_longest(range(3)).to_list()
-            [(0, 0), (1, 1), (2, 2), (3, None), (4, None)]
-            >>> Iter(range(5)).zip_longest(range(3), fillvalue="x").to_list()
-            [(0, 0), (1, 1), (2, 2), (3, 'x'), (4, 'x')]
+            >>> Iter([1, 2]).zip([3, 4, 5]).to_list()
+            [(1, 3), (2, 4)]
+            >>> Iter([1]).zip([3, 4], missing_policy=Raise()).to_list()
+            Traceback (most recent call last):
+                ...
+            ValueError: zip() argument 2 is longer than argument 1
+            >>> Iter([1, 2]).zip([3], missing_policy=Fill(0)).to_list()
+            [(1, 3), (2, 0)]
         """
-        return Iter(it.zip_longest(self, other, fillvalue=fillvalue))
+        match missing_policy:
+            case Raise():
+                return Iter(zip(self, other, strict=True))
+            case Ignore():
+                return Iter(zip(self, other, strict=False))
+            case Fill(fillvalue=fillvalue):
+                return Iter(it.zip_longest(self, other, fillvalue=fillvalue))
+
+        raise ValueError(  # pyright: ignore[reportUnreachable]
+            f"{missing_policy=} not recognized. Choices: Raise | Ignore | Fill"
+        )
 
     @tp.overload
     def zip2[T1](
