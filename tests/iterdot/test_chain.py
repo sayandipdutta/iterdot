@@ -7,7 +7,8 @@ from typing import Any, no_type_check
 
 import pytest
 
-from iterdot.chain import Default, Fill, Iter, Raise, SeqIter
+from iterdot.chain import Fill, Iter, Raise, SeqIter
+from iterdot.defaults import Default
 
 
 def consume(iterable: Iterable[Any]):
