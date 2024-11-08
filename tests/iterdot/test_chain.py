@@ -7,7 +7,7 @@ from typing import Any, no_type_check
 
 import pytest
 
-from iterdot.chain import Default, Iter, SeqIter
+from iterdot.chain import Default, Fill, Iter, Raise, SeqIter
 
 
 def consume(iterable: Iterable[Any]):
@@ -151,15 +151,18 @@ def test_slice(integers_from_0_to_1000: list[int]):
         _ = Iter(integers_from_0_to_1000).slice(start=0, stop=5, step=-1).to_list()
 
 
-def test_zip_with():
-    assert Iter(range(5)).zip_with(range(5, 10)).to_list() == list(
+def test_zip():
+    assert Iter(range(5)).zip(range(5, 10)).to_list() == list(
         zip(range(5), range(5, 10), strict=False)
     )
-    assert Iter(range(4)).zip_with(range(5, 10)).to_list() == list(
+    assert Iter(range(4)).zip(range(5, 10)).to_list() == list(
         zip(range(4), range(5, 10), strict=False)
     )
+    assert Iter(range(4)).zip(range(5, 10), missing_policy=Fill(None)).to_list() == list(
+        itl.zip_longest(range(4), range(5, 10), fillvalue=None)
+    )
     with pytest.raises(ValueError, match="shorter|longer"):
-        _ = Iter(range(4)).zip_with(range(5, 10), strict=True).to_list()
+        _ = Iter(range(4)).zip(range(5, 10), missing_policy=Raise()).to_list()
 
 
 def test_takewhile():
