@@ -1,13 +1,9 @@
 from collections.abc import Callable, Iterator
 from functools import cached_property
 from operator import gt, lt
-from typing import NamedTuple, Protocol, Self
+from typing import NamedTuple
 
-from iterdot.wtyping import Comparable
-
-
-class SupportsSub(Protocol):
-    def __sub__(self, other: Self) -> Self: ...
+from iterdot.wtyping import Comparable, SupportsSub
 
 
 class MinMax[T](NamedTuple):
