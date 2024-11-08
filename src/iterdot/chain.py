@@ -8,7 +8,7 @@ from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, S
 from contextlib import suppress
 from decimal import Decimal
 from fractions import Fraction
-from functools import partial, reduce, wraps
+from functools import partial, reduce
 from operator import add, attrgetter
 
 from iterdot._helpers import flatten, prepend, skip_take_by_order, sliding_window
@@ -17,7 +17,7 @@ from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
-from iterdot.wtyping import Comparable
+from iterdot.wtyping import Comparable, SupportsAdd, SupportsSumNoDefault
 
 
 @tp.final
@@ -35,43 +35,6 @@ class Collector[TIter]:
 
     def __call__(self) -> SeqIter[TIter]:
         return SeqIter(self.instance)
-
-
-class MethodKind[T]:
-    @staticmethod
-    def consumer[**P, R](
-        func: Callable[tp.Concatenate[Iterable[T], P], R],
-    ) -> Callable[tp.Concatenate[Iter[T], P], R]:
-        @wraps(func)
-        def inner(self: Iter[T], *args: P.args, **kwargs: P.kwargs) -> R:
-            return func(self, *args, **kwargs)
-
-        return inner
-
-    @staticmethod
-    def augmentor[**P, R](
-        func: Callable[tp.Concatenate[Iterable[T], P], Iterable[R]],
-    ) -> Callable[tp.Concatenate[Iter[T], P], Iter[R]]:
-        @wraps(func)
-        def inner(self: Iter[T], *args: P.args, **kwargs: P.kwargs) -> Iter[R]:
-            return Iter(func(self, *args, **kwargs))
-
-        return inner
-
-    @staticmethod
-    def predicated_augmentor[**P, R](
-        func: Callable[tp.Concatenate[Callable[[T], bool], Iterable[T], P], Iterable[R]],
-    ) -> Callable[tp.Concatenate[Iter[T], Callable[[T], bool], P], Iter[R]]:
-        @wraps(func)
-        def inner(
-            self: Iter[T],
-            predicate: Callable[[T], bool],
-            *args: P.args,
-            **kwargs: P.kwargs,
-        ) -> Iter[R]:
-            return Iter(func(predicate, self, *args, **kwargs))
-
-        return inner
 
 
 @tp.final
@@ -275,18 +238,20 @@ class Iter[T](Iterator[T]):
         func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
         return self.map(func)
 
-    compress = MethodKind[T].augmentor(it.compress)
-    """see itertools.compress"""
-    pairwise = MethodKind[T].augmentor(it.pairwise)
-    """see itertools.pairwise"""
-    batched = MethodKind[T].augmentor(it.batched)
-    """see itertools.batched"""
-    zip_with = MethodKind[T].augmentor(zip)
-    """see zip"""
-    takewhile = MethodKind[T].predicated_augmentor(it.takewhile)
-    """see itertools.takewhile"""
-    dropwhile = MethodKind[T].predicated_augmentor(it.dropwhile)
-    """see itertools.dropwhile"""
+    def compress(self, selectors: Iterable[object]) -> Iter[T]:
+        return Iter(it.compress(self, selectors=selectors))
+
+    def pairwise(self) -> Iter[tuple[T, T]]:
+        return Iter(it.pairwise(self))
+
+    def batched(self, n: int = 2, *, strict: bool = False) -> Iter[tuple[T, ...]]:
+        return Iter(it.batched(self, n, strict=strict))
+
+    def takewhile(self, predicate: Callable[[T], bool]) -> Iter[T]:
+        return Iter(it.takewhile(predicate, self))
+
+    def dropwhile(self, predicate: Callable[[T], bool]) -> Iter[T]:
+        return Iter(it.dropwhile(predicate, self))
 
     def accumulate(
         self, func: Callable[[T, T], T], *, initial: T | None = None
@@ -310,10 +275,31 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.islice(self, start, stop, step))
 
-    sum = MethodKind[T].consumer(sum)
-    """see sum"""
-    to_list = MethodKind[T].consumer(list)
-    """convert to list"""
+    # fmt: off
+    @tp.overload
+    def sum(self: Iterable[bool | int], /, start: int = 0) -> int: ...
+    @tp.overload
+    def sum[S: SupportsSumNoDefault](self: Iterable[S], /) -> S | tp.Literal[0]: ...
+    @tp.overload
+    def sum[A1: SupportsAdd[object, object], A2: SupportsAdd[object, object]](self: Iterable[A1], /, start: A2) -> A1 | A2: ...
+    # fmt: on
+
+    @tp.no_type_check
+    def sum(self, start: T | int = 0) -> T:
+        """
+        Return the sum of a 'start' value (default: 0) plus an iterable of numbers
+
+        When the iterable is empty, return the start value.
+        This function is intended specifically for use with numeric values and may
+        reject non-numeric types.
+
+        Returns:
+            result of sum
+        """
+        return sum(self, start=start)
+
+    def to_list(self) -> list[T]:
+        return list(self)
 
     @property
     def collect(self) -> Collector[T]:
