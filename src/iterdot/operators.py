@@ -1,12 +1,28 @@
+"""
+Defines functors for different operators
+"""
+
 from collections.abc import Callable, Container
 from operator import contains, eq, ge, gt, is_, is_not, le, lt, ne
 
 
-def comparator_factory[T1, T2](
+def binop_factory[T1, T2](
     op: Callable[[T1, T2], bool],
 ) -> Callable[[T2], Callable[[T1], bool]]:
-    def comparator(rhs: T2) -> Callable[[T1], bool]:
-        def wrapper(lhs: T1) -> bool:
+    def comparator(rhs: T2, /) -> Callable[[T1], bool]:
+        """
+        Given an operand (rhs), returns a closure that takes another operand (lhs), which returns bool
+
+        Example:
+            >>> list(filter(LessThan(5), range(3, 8)))
+            [3, 4]
+            >>> assert IsEqual(5)(6) == False
+
+        Returns:
+            a closure that takes LHS and returns operation result
+        """
+
+        def wrapper(lhs: T1, /) -> bool:
             return op(lhs, rhs)
 
         return wrapper
@@ -14,16 +30,16 @@ def comparator_factory[T1, T2](
     return comparator
 
 
-LessThan = comparator_factory(lt)
-GreaterThan = comparator_factory(gt)
-LessEqual = comparator_factory(le)
-GreaterEqual = comparator_factory(ge)
+LessThan = binop_factory(lt)
+GreaterThan = binop_factory(gt)
+LessEqual = binop_factory(le)
+GreaterEqual = binop_factory(ge)
 
-IsEqual = comparator_factory(eq)
-NotEqual = comparator_factory(ne)
+IsEqual = binop_factory(eq)
+NotEqual = binop_factory(ne)
 
-Is = comparator_factory(is_)
-IsNot = comparator_factory(is_not)
+Is = binop_factory(is_)
+IsNot = binop_factory(is_not)
 
 
 def Not[T](predicate: Callable[[T], bool]) -> Callable[[T], bool]:
