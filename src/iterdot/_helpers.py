@@ -2,7 +2,10 @@ from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import wraps
 from itertools import chain, islice
+from types import NoneType
 from typing import cast
+
+from iterdot.defaults import Ignore, MissingPolicy, Pad, Raise
 
 
 def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
@@ -49,3 +52,126 @@ def sliding_window[T](it: Iterator[T] | Sequence[T], n: int) -> Iterable[tuple[T
             yield tuple(it[i : i + n])
             if length - i - 1 < n:
                 break
+
+
+def sliding_window_iter[T, F](
+    it: Iterator[T],
+    n: int,
+    *,
+    stride: int = 1,
+    uneven: MissingPolicy[F] | None = None,
+) -> Iterator[tuple[T, ...]] | Iterator[tuple[T | F, ...]]:
+    match uneven:
+        case Pad(fillvalue=pad):
+            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
+            if not window:
+                return
+
+            if (wl := len(window)) < n:
+                yield tuple(window) + (pad,) * (wl - n)
+                return
+            while last:
+                yield tuple(window)
+                last = tuple(islice(it, stride))
+                ll = len(last)
+                if ll == stride:
+                    window.extend(last)
+                    continue
+                elif ll == 0:
+                    wl = len(window)
+                    while (wl := wl - stride) > 0:
+                        window.extend((pad,) * stride)
+                        yield tuple(window)
+                    return
+                else:
+                    if stride - ll >= n:
+                        return
+                    last += (pad,) * (stride - ll)
+                    window.extend(last)
+        case Ignore():
+            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
+            if not window:
+                return
+
+            while last:
+                yield tuple(window)
+                last = tuple(islice(it, stride))
+                if len(last) < stride:
+                    return
+                window.extend(last)
+        case Raise():
+            for window in sliding_window_iter(it, n, stride=stride, uneven=None):
+                if len(window) == n:
+                    yield window
+                else:
+                    raise ValueError(
+                        f"Last window of length {len(window)} is shorter than specified {n=}"
+                    )
+        case NoneType():
+            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
+            if not window:
+                return
+
+            while last:
+                yield tuple(window)
+                last = tuple(islice(it, stride))
+                ll = len(last)
+                if ll == stride:
+                    window.extend(last)
+                    continue
+                elif ll == 0:
+                    wl = len(window)
+                    while (wl := wl - stride) > 0:
+                        yield tuple(window)[-wl:]
+                    return
+                else:
+                    if stride - ll >= n:
+                        return
+                    wl = len(window)
+                    while (wl := wl - stride) > 0:
+                        yield tuple(window)[-wl:]
+                    else:
+                        remainder = stride - len(window)
+                        while window:
+                            _ = window.popleft()
+                        window.extend(last)
+                        if remainder > 0:
+                            for _ in range(remainder):
+                                _ = window.popleft()
+                        yield tuple(window)
+                    return
+
+
+def sliding_window_seq[T, F](
+    it: Sequence[T],
+    n: int,
+    *,
+    stride: int = 1,
+    uneven: MissingPolicy[F] | None = None,
+) -> Sequence[tuple[T, ...]] | Sequence[tuple[T | F, ...]]:
+    if not it:
+        return ()
+    result = *rest, last = [
+        tuple[T | F, ...](it[i : i + n]) for i in range(0, len(it), stride)
+    ]
+    match uneven:
+        case Pad(fillvalue=pad):
+            if len(last) < n:
+                rest.append(last + (pad,) * (n - len(last)))
+            else:
+                rest.append(last)
+            return rest
+        case NoneType():
+            return result
+        case Ignore():
+            if len(last) < n:
+                return rest
+            rest.append(last)
+            return rest
+        case Raise():
+            if len(last) < n:
+                raise ValueError(
+                    f"Last window of length {len(last)} is shorter than specified {n=}"
+                )
+            rest.append(last)
+            return rest
