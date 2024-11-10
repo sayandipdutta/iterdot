@@ -143,3 +143,5 @@ def sliding_window_seq[T, F](
                 )
             rest.append(last)
             return rest
+        case unknown:  # # pyright: ignore[reportUnnecessaryComparison]
+            raise ValueError(f"Received unknown value for uneven: {unknown!r}")  # pyright: ignore[reportUnreachable]
