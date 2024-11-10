@@ -7,8 +7,8 @@ from typing import Any, no_type_check
 
 import pytest
 
-from iterdot.chain import Fill, Iter, Raise, SeqIter
-from iterdot.defaults import Default
+from iterdot.chain import Iter, SeqIter
+from iterdot.defaults import Default, Pad, Raise
 
 
 def consume(iterable: Iterable[Any]):
@@ -159,7 +159,7 @@ def test_zip():
     assert Iter(range(4)).zip(range(5, 10)).to_list() == list(
         zip(range(4), range(5, 10), strict=False)
     )
-    assert Iter(range(4)).zip(range(5, 10), missing_policy=Fill(None)).to_list() == list(
+    assert Iter(range(4)).zip(range(5, 10), missing_policy=Pad(None)).to_list() == list(
         itl.zip_longest(range(4), range(5, 10), fillvalue=None)
     )
     with pytest.raises(ValueError, match="shorter|longer"):
