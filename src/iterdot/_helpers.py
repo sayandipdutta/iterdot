@@ -1,7 +1,7 @@
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import wraps
-from itertools import chain, islice
+from itertools import chain, groupby, islice, takewhile
 from operator import call
 from types import NoneType
 from typing import cast
@@ -72,41 +72,26 @@ def sliding_window_iter[T, F](
                 for item in sliding_window_iter(it, n, stride=stride, uneven=None)
             )
         case Ignore():
-            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
-            if not window:
-                return
-
-            while last:
-                yield tuple(window)
-                last = tuple(islice(it, stride))
-                if len(last) < stride:
-                    return
-                window.extend(last)
+            yield from takewhile(
+                lambda window: len(window) == n,
+                sliding_window_iter(it, n, stride=stride, uneven=None),
+            )
         case Raise():
-            for window in sliding_window_iter(it, n, stride=stride, uneven=None):
-                if len(window) == n:
-                    yield window
-                else:
+            windows = sliding_window_iter(it, n, stride=stride, uneven=None)
+            for winlen, group in groupby(windows, key=len):
+                if winlen != n:
                     raise ValueError(
-                        f"Last window of length {len(window)} is shorter than specified {n=}"
+                        f"Last window of length {winlen} is shorter than specified {n=}"
                     )
+                yield from group
         case NoneType():
-            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
-            if not window:
-                return
-
-            while True:
+            window = deque[T | F](tuple(islice(it, n)), maxlen=n)
+            while window:
                 yield tuple(window)
-                n1 = min(stride, len(window))
-                consume(map(call, [window.popleft] * n1))
-                stride_remaining = tuple(islice(it, stride - n1))
-                if stride - n1 > 0 and not stride_remaining:
-                    if not window:
-                        return
-                else:
-                    window.extend(islice(it, stride))
-                if not window:
-                    return
+                window.extend(stride_remaining := tuple(islice(it, stride)))
+                num_pop = min(len(window), stride - len(stride_remaining))
+                consume(map(call, [window.popleft] * num_pop))
+
         case unknown:  # # pyright: ignore[reportUnnecessaryComparison]
             raise ValueError(f"Received unknown value for uneven: {unknown!r}")  # pyright: ignore[reportUnreachable]
 
