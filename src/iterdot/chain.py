@@ -257,28 +257,30 @@ class Iter[T](Iterator[T]):
 
     # TODO: add itemgetter
     # TODO: Replace type[K] with TypeForm (when available)
-    def getattr[K](self, *names: str, type: type[K]) -> Iter[K]:
+    def getattr[K](self: Iterable[T], *names: str, type: type[K]) -> Iter[K]:
         del type
         func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
-        return self.map(func)
+        return Iter(map(func, self))
 
-    def compress(self, selectors: Iterable[object]) -> Iter[T]:
+    def compress(self: Iterable[T], selectors: Iterable[object]) -> Iter[T]:
         return Iter(it.compress(self, selectors=selectors))
 
-    def pairwise(self) -> Iter[tuple[T, T]]:
+    def pairwise(self: Iterable[T]) -> Iter[tuple[T, T]]:
         return Iter(it.pairwise(self))
 
-    def batched(self, n: int = 2, *, strict: bool = False) -> Iter[tuple[T, ...]]:
+    def batched(
+        self: Iterable[T], n: int = 2, *, strict: bool = False
+    ) -> Iter[tuple[T, ...]]:
         return Iter(it.batched(self, n, strict=strict))
 
-    def takewhile(self, predicate: Predicate[T]) -> Iter[T]:
+    def takewhile(self: Iterable[T], predicate: Predicate[T]) -> Iter[T]:
         return Iter(it.takewhile(predicate, self))
 
-    def dropwhile(self, predicate: Predicate[T]) -> Iter[T]:
+    def dropwhile(self: Iterable[T], predicate: Predicate[T]) -> Iter[T]:
         return Iter(it.dropwhile(predicate, self))
 
     def accumulate(
-        self, func: Callable[[T, T], T], *, initial: T | None = None
+        self: Iterable[T], func: Callable[[T, T], T], *, initial: T | None = None
     ) -> Iter[T]:
         """
         see itertools.accumulate
@@ -289,7 +291,11 @@ class Iter[T](Iterator[T]):
         return Iter(it.accumulate(self, func, initial=initial))
 
     def slice(
-        self, *, start: int | None = 0, stop: int | None = None, step: int | None = 1
+        self: Iterable[T],
+        *,
+        start: int | None = 0,
+        stop: int | None = None,
+        step: int | None = 1,
     ) -> Iter[T]:
         """
         see itertools.islice
@@ -309,7 +315,7 @@ class Iter[T](Iterator[T]):
     # fmt: on
 
     @tp.no_type_check
-    def sum(self, start: T | int = 0) -> T:
+    def sum(self: Iterable[T], start: T | int = 0) -> T:
         """
         Return the sum of a 'start' value (default: 0) plus an iterable of numbers
 
@@ -322,15 +328,15 @@ class Iter[T](Iterator[T]):
         """
         return sum(self, start=start)
 
-    def to_list(self) -> list[T]:
+    def to_list(self: Iterable[T]) -> list[T]:
         return list(self)
 
     @property
-    def collect(self) -> Collector[T]:
+    def collect(self: Iter[T]) -> Collector[T]:
         return Collector[T](self)
 
     def find(
-        self, finder: Callable[[T], bool] | T
+        self: Iterable[T], finder: Callable[[T], bool] | T
     ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
         """
         Find a value and its index in the iterable, either by passing the value to find or a callable
@@ -349,25 +355,26 @@ class Iter[T](Iterator[T]):
             >>> Iter([1, 2, 3, 4]).find(5)
             <Default.Unavailable: 3>
         """
+        itbl = self if isinstance(self, Iter) else Iter(self)
         if callable(finder):
             finder = tp.cast(Callable[[T], bool], finder)
-            return self.enumerate().filter(lambda x: finder(x.value)).next(Unavailable)
-        return self.enumerate().filter(IsEqual(finder)).next(Unavailable)
+            return itbl.enumerate().filter(lambda x: finder(x.value)).next(Unavailable)
+        return itbl.enumerate().filter(IsEqual(finder)).next(Unavailable)
 
     @tp.overload
     def max[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = NoDefault,
     ) -> TComparable: ...
     @tp.overload
     def max[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F: ...
     def max[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = NoDefault,
     ) -> TComparable | F:
@@ -411,18 +418,18 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def min[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> TComparable: ...
     @tp.overload
     def min[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F: ...
     def min[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> TComparable | F:
@@ -466,18 +473,18 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def minmax_eager[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: tp.Literal[Default.NoDefault] = Default.NoDefault,
     ) -> MinMax[TComparable]: ...
     @tp.overload
     def minmax_eager[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]: ...
     def minmax_eager[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterable[TComparable],
         key: Callable[[TComparable], Comparable] | None = None,
         default: F = Default.NoDefault,
     ) -> MinMax[TComparable] | MinMax[F]:
@@ -518,21 +525,21 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def minmax_lazy(
-        self,
+        self: Iterator[T],
         /,
         *,
         key: Callable[[T], Comparable],
     ) -> MinMax[T]: ...
     @tp.overload
     def minmax_lazy[TComparable: Comparable](
-        self: Iter[TComparable],
+        self: Iterator[TComparable],
         /,
         *,
         key: None = None,
     ) -> MinMax[TComparable]: ...
     @tp.overload
     def minmax_lazy[F](
-        self,
+        self: Iterator[T],
         /,
         *,
         key: Callable[[T], Comparable],
@@ -540,14 +547,14 @@ class Iter[T](Iterator[T]):
     ) -> MinMax[T] | MinMax[F]: ...
     @tp.overload
     def minmax_lazy[TComparable: Comparable, F](
-        self: Iter[TComparable],
+        self: Iterator[TComparable],
         /,
         *,
         key: None = None,
         default: F,
     ) -> MinMax[TComparable] | MinMax[F]: ...
     @tp.no_type_check
-    def minmax_lazy(self, /, *, default=Default.NoDefault, key=None):
+    def minmax_lazy(self: Iterable[T], /, *, default=Default.NoDefault, key=None):
         """Lazily calculate min and max processing one item at a time.
 
         Args:
@@ -599,7 +606,7 @@ class Iter[T](Iterator[T]):
             self._last_yielded_index += 1
         return self._last_yielded_value
 
-    def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
+    def all(self: Iterable[T], predicate: Callable[[T], bool] | None = None) -> bool:
         """
         Check if all elements are Truthy or if given a prediate, check
         if all element evaluate to True when the predicate is applied.
@@ -626,7 +633,7 @@ class Iter[T](Iterator[T]):
         """
         return all(self) if predicate is None else all(map(predicate, self))
 
-    def any(self, predicate: Predicate[T] | None = None) -> bool:
+    def any(self: Iterable[T], predicate: Predicate[T] | None = None) -> bool:
         """
         Check if any elements is Truthy or if given a prediate, check
         if any element evaluates to True when the predicate is applied.
@@ -652,7 +659,7 @@ class Iter[T](Iterator[T]):
         """
         return any(self) if predicate is None else any(map(predicate, self))
 
-    def all_equal(self) -> bool:
+    def all_equal(self: Iterable[T]) -> bool:
         """
         Check if all elements are equal to each other.
 
@@ -669,12 +676,12 @@ class Iter[T](Iterator[T]):
             >>> Iter(()).all_equal()
             True
         """
-        first = self.first()
+        first = next(iter(self), Exhausted)
         if first is Exhausted:
             return True
         return all(first == item for item in self)
 
-    def all_equal_with(self, value: T | None = None) -> bool:
+    def all_equal_with(self: Iterable[T], value: T | None = None) -> bool:
         """
         Check if all elements are equal to the given `value`.
 
@@ -692,12 +699,12 @@ class Iter[T](Iterator[T]):
             False
         """
         # BUG: potential bug, what happens if value is Exhausted, and iterable empty
-        if self.first() == Default.Exhausted != value:
+        if next(iter(self), Exhausted) == Default.Exhausted != value:
             return False
         return all(value == item for item in self)
 
     def map_partial[R, **P](
-        self,
+        self: Iterable[T],
         func: Callable[tp.Concatenate[T, P], R],
         *args: P.args,
         **kwargs: P.kwargs,
@@ -723,17 +730,17 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def map[K, R](
-        self,
+        self: Iterable[T],
         func: Callable[[T], R],
     ) -> Iter[R]: ...
     @tp.overload
     def map[K, _, R, **P](
-        self,
+        self: Iterable[T],
         func: Callable[tp.Concatenate[T, _, ...], R],
         *args: Iterable[K],
     ) -> Iter[R]: ...
     def map[K, R](
-        self,
+        self: Iterable[T],
         func: Callable[tp.Concatenate[T, ...], R],
         *args: Iterable[K],
     ) -> Iter[R]:
@@ -781,7 +788,9 @@ class Iter[T](Iterator[T]):
         """
         return func(self, *args, **kwargs)
 
-    def filter(self, predicate: Predicate[T] | None, *, invert: bool = False) -> Iter[T]:
+    def filter(
+        self: Iterable[T], predicate: Predicate[T] | None, *, invert: bool = False
+    ) -> Iter[T]:
         """
         Filter self based on predicate.
 
@@ -801,13 +810,14 @@ class Iter[T](Iterator[T]):
             >>> Iter([1, 2, 3, 4]).filter(lambda x: x % 2 == 0, invert=True).to_list()
             [1, 3]
         """
+        itbl = self._iter if isinstance(self, Iter) else iter(self)
         return (
-            Iter(it.filterfalse(predicate, self._iter))
+            Iter(it.filterfalse(predicate, itbl))
             if invert
-            else Iter(filter(predicate, self._iter))
+            else Iter(filter(predicate, itbl))
         )
 
-    def starmap[*Ts, R](self: Iter[tuple[*Ts]], func: Callable[[*Ts], R]) -> Iter[R]:
+    def starmap[*Ts, R](self: Iterable[tuple[*Ts]], func: Callable[[*Ts], R]) -> Iter[R]:
         """
         see itertools.starmap
 
@@ -819,7 +829,8 @@ class Iter[T](Iterator[T]):
             >>> Iter([(0, 1), (10, 20)]).starmap(add).to_list()
             [1, 30]
         """
-        return Iter(it.starmap(func, self._iter))
+        itbl = self._iter if isinstance(self, Iter) else iter(self)
+        return Iter(it.starmap(func, itbl))
 
     @tp.overload
     def first[TDefault](self, default: tp.Literal[Default.NoDefault]) -> T: ...
@@ -899,7 +910,7 @@ class Iter[T](Iterator[T]):
                 raise StopIteration("Underlying iterable is empty") from None
             return default
 
-    def tail(self, n: int) -> Iter[T]:
+    def tail(self: Iterable[T], n: int) -> Iter[T]:
         """
         Return n items from end if available, or return all available items.
 
@@ -917,7 +928,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(deque(self, maxlen=n))
 
-    def head(self, n: int) -> Iter[T]:
+    def head(self: Iterable[T], n: int) -> Iter[T]:
         """
         Return n items from beginning if available, or return all available items.
 
@@ -933,9 +944,9 @@ class Iter[T](Iterator[T]):
             >>> Iter([0, 1, 2, 3]).head(5).to_list()
             [0, 1, 2, 3]
         """
-        return self.slice(stop=n)
+        return Iter(it.islice(self, n))
 
-    def skip(self, n: int) -> Iter[T]:
+    def skip(self: Iterable[T], n: int) -> Iter[T]:
         """Advance the iterator n positions.
 
         Args:
@@ -948,9 +959,10 @@ class Iter[T](Iterator[T]):
             >>> Iter([1, 2, 3, 4]).skip(2).to_list()
             [3, 4]
         """
-        return self if not n else self.slice(start=n, stop=None)
+        itbl = self if isinstance(self, Iter) else Iter(self)
+        return itbl if not n else itbl.slice(start=n, stop=None)
 
-    def exhaust(self) -> None:
+    def exhaust(self: Iterable[T]) -> None:
         """Exhaust all items in self. Could be used for side-effects.
 
         See Also:
@@ -969,7 +981,7 @@ class Iter[T](Iterator[T]):
         """
         deque[T](maxlen=0).extend(self)
 
-    def foreach[R](self, func: Callable[[T], None]) -> None:
+    def foreach[R](self: Iterable[T], func: Callable[[T], object]) -> None:
         """map func on each item of self, and exhaust.
 
         See Also:
@@ -982,7 +994,7 @@ class Iter[T](Iterator[T]):
             3
             4
         """
-        self.map(func).exhaust()
+        return deque[object](maxlen=0).extend(map(func, self))
 
     @staticmethod
     def _get_skip_take_selectors(
@@ -993,7 +1005,9 @@ class Iter[T](Iterator[T]):
             yield from it.repeat(*s2)
 
     @skip_take_by_order
-    def skip_take(self, *, skip: int, take: int, take_first: bool = False) -> Iter[T]:
+    def skip_take(
+        self: Iterable[T], *, skip: int, take: int, take_first: bool = False
+    ) -> Iter[T]:
         """
         skip some elements followed by take some elements, or vice versa.
 
@@ -1017,11 +1031,12 @@ class Iter[T](Iterator[T]):
             >>> Iter(range(10)).skip_take(take=3, skip=2).to_list()
             [0, 1, 2, 5, 6, 7]
         """
+        itbl = self if isinstance(self, Iter) else Iter(self)
         if take_first:
-            selectors = self._get_skip_take_selectors((True, take), (False, skip))
+            selectors = itbl._get_skip_take_selectors((True, take), (False, skip))
         else:
-            selectors = self._get_skip_take_selectors((False, skip), (True, take))
-        return self.compress(selectors)
+            selectors = itbl._get_skip_take_selectors((False, skip), (True, take))
+        return itbl.compress(selectors)
 
     @tp.overload
     def chain_from_iter[K1](
@@ -1029,10 +1044,12 @@ class Iter[T](Iterator[T]):
     ) -> Iter[K1]: ...
 
     @tp.overload
-    def chain_from_iter[K2](self, iterable: Iterable[Iterable[K2]]) -> Iter[T | K2]: ...
+    def chain_from_iter[K2](
+        self: Iterable[T], iterable: Iterable[Iterable[K2]]
+    ) -> Iter[T | K2]: ...
 
     def chain_from_iter[K1, K2](
-        self: tp.Self | Iter[Iterable[K1]],
+        self: Iterable[T] | Iter[Iterable[K1]],
         iterable: Iterable[Iterable[K2]] | None = None,
     ) -> Iter[K1] | Iter[T | K2]:
         """Chain multiple iterables together by flattening them.
@@ -1060,11 +1077,13 @@ class Iter[T](Iterator[T]):
 
     # TODO: consider default
     @tp.overload
-    def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T: ...
+    def reduce(
+        self: Iterable[T], func: Callable[[T, T], T], initial: T | None = None
+    ) -> T: ...
     @tp.overload
-    def reduce[I](self, func: Callable[[I, T], I], initial: I) -> I: ...
+    def reduce[I](self: Iterable[T], func: Callable[[I, T], I], initial: I) -> I: ...
     @tp.no_type_check
-    def reduce(self, func, initial=None):
+    def reduce(self: Iterable[T], func, initial=None):
         """Reduce the sequence using a binary function.
 
         Args:
@@ -1272,7 +1291,64 @@ class Iter[T](Iterator[T]):
     ) -> Iter[tuple[T, T1, T2, T3]]:
         return Iter(zip(self, iter1, iter2, iter3, strict=strict))
 
-    def product_2[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+    # fmt: off
+    @tp.overload
+    def zipn[R](self: Iterable[T], *others: Iterable[R], missing_policy: Ignore = IGNORE) -> Iter[tuple[T | R, ...]]: ...
+    @tp.overload
+    def zipn[R](self: Iterable[T], *others: Iterable[R], missing_policy: Raise) -> Iter[tuple[T | R, ...]]: ...
+    @tp.overload
+    def zipn[R, F](self: Iterable[T], *others: Iterable[R], missing_policy: Pad[F]) -> Iter[tuple[T | R | F, ...]]: ...
+    # fmt: on
+    def zipn[R, F](
+        self: Iterable[T],
+        *others: Iterable[R],
+        missing_policy: MissingPolicy[F] = IGNORE,
+    ) -> Iter[tuple[T | R, ...]] | Iter[tuple[T | R | F, ...]]:
+        """Zip iterables together with configurable behavior for unequal lengths.
+
+        This method provides three strategies for handling iterables of unequal length:
+        1. Ignore (default): Stop when shortest iterable is exhausted
+        2. Raise: Raise an error if iterables have unequal length
+        3. Pad: Use a fill value to pad the shorter iterable
+
+        Args:
+            others: Other iterables to zip with
+            missing_policy: Policy for handling unequal length iterables:
+                - Ignore(): Stop when shortest exhausted (default)
+                - Raise(): Raise error if lengths unequal
+                - Pad(value): Pad shorter with value
+
+        Returns:
+            Iter[tuple[T | R, ...]]: Zipped iterators
+            Iter[tuple[T | R | F, ...]]: Zipped iterators with fill value type when using Pad policy
+
+        Raises:
+            ValueError: If iterables have unequal length and if_unequal=Raise()
+                or missing_policy receives an unknown MissingPolicy
+
+        Example:
+            >>> Iter([1, 2]).zipn([3, 4, 5], [10, 20]).to_list()
+            [(1, 3, 10), (2, 4, 20)]
+            >>> Iter([1]).zipn([3, 4], missing_policy=Raise()).to_list()
+            Traceback (most recent call last):
+                ...
+            ValueError: zip() argument 2 is longer than argument 1
+            >>> Iter([1, 2]).zipn([3], missing_policy=Pad(0)).to_list()
+            [(1, 3), (2, 0)]
+        """
+        match missing_policy:
+            case Raise():
+                return Iter(zip(self, *others, strict=True))
+            case Ignore():
+                return Iter(zip(self, *others, strict=False))
+            case Pad(fillvalue=fillvalue):
+                return Iter(it.zip_longest(self, *others, fillvalue=fillvalue))
+
+        raise ValueError(  # pyright: ignore[reportUnreachable]
+            f"{missing_policy=} not recognized. Choices: Raise | Ignore | Pad"
+        )
+
+    def product_2[T2](self: Iterable[T], other: Iterable[T2]) -> Iter[tuple[T, T2]]:
         """
         see itertools.product
 
@@ -1293,7 +1369,7 @@ class Iter[T](Iterator[T]):
         return Iter(it.product(self, it1, it2))
 
     def product_n[R](
-        self, *itbl: Iterable[R], repeat: int = 1
+        self: Iterable[T], *itbl: Iterable[R], repeat: int = 1
     ) -> Iter[tuple[T | R, ...]]:
         """
         see itertools.product
@@ -1325,7 +1401,7 @@ class Iter[T](Iterator[T]):
 
     @property
     def stats[TNumber: (float, Decimal, Fraction) = float](
-        self: Iter[TNumber],
+        self: Iterable[TNumber],
     ) -> stats[TNumber]:
         return stats[TNumber](self)
 
@@ -1344,7 +1420,7 @@ class Iter[T](Iterator[T]):
         """
         return self.map(type)
 
-    def prepend[V](self, *values: V) -> Iter[T | V]:
+    def prepend[V](self: Iterable[T], *values: V) -> Iter[T | V]:
         """Prepend values to the beginning of the iterator.
 
         Args:
@@ -1359,7 +1435,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.chain(values, self))
 
-    def append[V](self, *values: V) -> Iter[T | V]:
+    def append[V](self: Iterable[T], *values: V) -> Iter[T | V]:
         """Append values to the end of the iterator.
 
         Args:
@@ -1374,7 +1450,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.chain(self, values))
 
-    def flatten_once[T1](self: Iter[Sequence[T1]]) -> Iter[T1]:
+    def flatten_once[T1](self: Iterable[Sequence[T1]]) -> Iter[T1]:
         """Flatten one level of nesting in sequences.
 
         Returns:
@@ -1386,7 +1462,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.chain.from_iterable(self))
 
-    def flatten(self) -> Iter[object]:
+    def flatten(self: Iterable[T]) -> Iter[object]:
         """Recursively flatten nested sequences.
 
         Returns:
@@ -1459,27 +1535,27 @@ class Iter[T](Iterator[T]):
 
     @tp.overload
     def sliding_window(
-        self,
+        self: Iterator[T],
         n: int,
         *,
         uneven: Raise | Ignore | None = None,
     ) -> Iter[tuple[T, ...]]: ...
     @tp.overload
     def sliding_window[F](
-        self,
+        self: Iterator[T],
         n: int,
         *,
         uneven: Pad[F],
     ) -> Iter[tuple[T | F, ...]]: ...
     def sliding_window[F](
-        self,
+        self: Iterator[T],
         n: int,
         *,
         uneven: MissingPolicy[F] | None = None,
     ) -> Iter[tuple[T, ...]] | Iter[tuple[T | F, ...]]:
         return Iter(sliding_window_iter(self, n, uneven=uneven))
 
-    def product_with[T2](self, other: Iterable[T2]) -> Iter[tuple[T, T2]]:
+    def product_with[T2](self: Iterable[T], other: Iterable[T2]) -> Iter[tuple[T, T2]]:
         """Calculate the cartesian product with another iterable.
 
         Args:
@@ -1538,7 +1614,9 @@ class Iter[T](Iterator[T]):
 
         return Iter(apply(self))
 
-    def groupby_true(self, key: Callable[[T], Hashable]) -> Iter[Iterable[T]]:
+    def groupby_true(
+        self: Iterable[T], key: Callable[[T], Hashable]
+    ) -> Iter[Iterable[T]]:
         """
         Given a predicate as key, return groups of consecutive items where key evaluates to True
 
@@ -1554,7 +1632,9 @@ class Iter[T](Iterator[T]):
         """
         return Iter(item[1] for item in it.groupby(self, key) if item[0])
 
-    def groupby_false(self, key: Callable[[T], Hashable]) -> Iter[Iterable[T]]:
+    def groupby_false(
+        self: Iterable[T], key: Callable[[T], Hashable]
+    ) -> Iter[Iterable[T]]:
         """
         Given a predicate as key, return groups of consecutive items where key evaluates to False
 
@@ -1570,7 +1650,9 @@ class Iter[T](Iterator[T]):
         """
         return Iter(item[1] for item in it.groupby(self, key) if not item[0])
 
-    def groupby(self, key: Callable[[T], Hashable]) -> Iter[tuple[Hashable, Iterable[T]]]:
+    def groupby(
+        self: Iterable[T], key: Callable[[T], Hashable]
+    ) -> Iter[tuple[Hashable, Iterable[T]]]:
         """See itertools.groupby
 
         Returns:
@@ -1579,7 +1661,7 @@ class Iter[T](Iterator[T]):
         return Iter(it.groupby(self, key))
 
     def filter_map[R](
-        self, predicate_apply: Callable[[T], tp.Literal[False] | R]
+        self: Iterable[T], predicate_apply: Callable[[T], tp.Literal[False] | R]
     ) -> Iter[R]:
         """
         Map on filtered elements.
@@ -1639,7 +1721,7 @@ class Iter[T](Iterator[T]):
         return self.peek_next_value() is Exhausted
 
     def flatmap[**P, R](
-        self,
+        self: Iterable[T],
         func: Callable[tp.Concatenate[T, P], Sequence[R]],
         *args: P.args,
         **kwargs: P.kwargs,
@@ -1662,9 +1744,9 @@ class Iter[T](Iterator[T]):
             >>> Iter(['ab', 'cd']).flatmap(list).to_list()
             ['a', 'b', 'c', 'd']
         """
-        return self.map_partial(func, *args, **kwargs).flatten_once()
+        return Iter(it.chain.from_iterable(func(item, *args, **kwargs) for item in self))
 
-    def cycle(self) -> Iter[T]:
+    def cycle(self: Iterable[T]) -> Iter[T]:
         """Create an iterator that cycles through the elements infinitely.
 
         Returns:
@@ -1676,7 +1758,9 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.cycle(self))
 
-    def partition(self, predicate: Predicate[T]) -> tuple[SeqIter[T], SeqIter[T]]:
+    def partition(
+        self: Iterable[T], predicate: Predicate[T]
+    ) -> tuple[SeqIter[T], SeqIter[T]]:
         results = defaultdict[bool, list[T]](list)
         for key, group in it.groupby(self, predicate):
             results[bool(key)].extend(group)
@@ -2203,7 +2287,7 @@ class SeqIter[T](Sequence[T]):
         return reduce(func, self, initial)
 
     def transpose[TSized: Sized](
-        self: SeqIter[TSized],
+        self: Sequence[TSized],
         *,
         strict: bool = False,
     ) -> SeqIter[TSized]:
