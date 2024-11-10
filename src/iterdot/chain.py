@@ -1107,18 +1107,18 @@ class Iter[T](Iterator[T]):
         This method provides three strategies for handling iterables of unequal length:
         1. Ignore (default): Stop when shortest iterable is exhausted
         2. Raise: Raise an error if iterables have unequal length
-        3. Fill: Use a fill value to pad the shorter iterable
+        3. Pad: Use a fill value to pad the shorter iterable
 
         Args:
             other: Second iterable to zip with
             missing_policy: Policy for handling unequal length iterables:
                 - Ignore(): Stop when shortest exhausted (default)
                 - Raise(): Raise error if lengths unequal
-                - Fill(value): Pad shorter with value
+                - Pad(value): Pad shorter with value
 
         Returns:
             Iter[tuple[T, R]]: Zipped iterator pairs
-            Iter[tuple[T | F, R | F]]: Zipped pairs with fill value type when using Fill policy
+            Iter[tuple[T | F, R | F]]: Zipped pairs with fill value type when using Pad policy
 
         Raises:
             ValueError: If iterables have unequal length and if_unequal=Raise()
@@ -1131,7 +1131,7 @@ class Iter[T](Iterator[T]):
             Traceback (most recent call last):
                 ...
             ValueError: zip() argument 2 is longer than argument 1
-            >>> Iter([1, 2]).zip([3], missing_policy=Fill(0)).to_list()
+            >>> Iter([1, 2]).zip([3], missing_policy=Pad(0)).to_list()
             [(1, 3), (2, 0)]
         """
         match missing_policy:
@@ -1143,7 +1143,7 @@ class Iter[T](Iterator[T]):
                 return Iter(it.zip_longest(self, other, fillvalue=fillvalue))
 
         raise ValueError(  # pyright: ignore[reportUnreachable]
-            f"{missing_policy=} not recognized. Choices: Raise | Ignore | Fill"
+            f"{missing_policy=} not recognized. Choices: Raise | Ignore | Pad"
         )
 
     @tp.overload
