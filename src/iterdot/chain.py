@@ -3,8 +3,16 @@ from __future__ import annotations
 
 import itertools as it
 import typing as tp
-from collections import deque
-from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
+from collections import defaultdict, deque
+from collections.abc import (
+    Callable,
+    Generator,
+    Hashable,
+    Iterable,
+    Iterator,
+    Sequence,
+    Sized,
+)
 from contextlib import suppress
 from decimal import Decimal
 from fractions import Fraction
@@ -33,7 +41,7 @@ from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
-from iterdot.wtyping import Comparable, SupportsAdd, SupportsSumNoDefault
+from iterdot.wtyping import Comparable, Predicate, SupportsAdd, SupportsSumNoDefault
 
 
 @tp.final
@@ -263,10 +271,10 @@ class Iter[T](Iterator[T]):
     def batched(self, n: int = 2, *, strict: bool = False) -> Iter[tuple[T, ...]]:
         return Iter(it.batched(self, n, strict=strict))
 
-    def takewhile(self, predicate: Callable[[T], bool]) -> Iter[T]:
+    def takewhile(self, predicate: Predicate[T]) -> Iter[T]:
         return Iter(it.takewhile(predicate, self))
 
-    def dropwhile(self, predicate: Callable[[T], bool]) -> Iter[T]:
+    def dropwhile(self, predicate: Predicate[T]) -> Iter[T]:
         return Iter(it.dropwhile(predicate, self))
 
     def accumulate(
@@ -616,11 +624,9 @@ class Iter[T](Iterator[T]):
             >>> Iter(()).all()
             True
         """
-        if predicate is None:
-            return all(self)
-        return self.map(predicate).all()
+        return all(self) if predicate is None else all(map(predicate, self))
 
-    def any(self, predicate: Callable[[T], bool] | None = None) -> bool:
+    def any(self, predicate: Predicate[T] | None = None) -> bool:
         """
         Check if any elements is Truthy or if given a prediate, check
         if any element evaluates to True when the predicate is applied.
@@ -644,9 +650,7 @@ class Iter[T](Iterator[T]):
             >>> Iter(()).any()
             False
         """
-        if predicate is None:
-            return any(self)
-        return self.map(predicate).any()
+        return any(self) if predicate is None else any(map(predicate, self))
 
     def all_equal(self) -> bool:
         """
@@ -777,9 +781,7 @@ class Iter[T](Iterator[T]):
         """
         return func(self, *args, **kwargs)
 
-    def filter(
-        self, predicate: Callable[[T], bool] | None, *, invert: bool = False
-    ) -> Iter[T]:
+    def filter(self, predicate: Predicate[T] | None, *, invert: bool = False) -> Iter[T]:
         """
         Filter self based on predicate.
 
@@ -1536,7 +1538,7 @@ class Iter[T](Iterator[T]):
 
         return Iter(apply(self))
 
-    def groupby_true(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+    def groupby_true(self, key: Callable[[T], Hashable]) -> Iter[Iterable[T]]:
         """
         Given a predicate as key, return groups of consecutive items where key evaluates to True
 
@@ -1552,7 +1554,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(item[1] for item in it.groupby(self, key) if item[0])
 
-    def groupby_false(self, key: Callable[[T], bool]) -> Iter[Iterable[T]]:
+    def groupby_false(self, key: Callable[[T], Hashable]) -> Iter[Iterable[T]]:
         """
         Given a predicate as key, return groups of consecutive items where key evaluates to False
 
@@ -1568,7 +1570,7 @@ class Iter[T](Iterator[T]):
         """
         return Iter(item[1] for item in it.groupby(self, key) if not item[0])
 
-    def groupby(self, key: Callable[[T], bool]) -> Iter[tuple[bool, Iterable[T]]]:
+    def groupby(self, key: Callable[[T], Hashable]) -> Iter[tuple[Hashable, Iterable[T]]]:
         """See itertools.groupby
 
         Returns:
@@ -1674,6 +1676,12 @@ class Iter[T](Iterator[T]):
         """
         return Iter(it.cycle(self))
 
+    def partition(self, predicate: Predicate[T]) -> tuple[SeqIter[T], SeqIter[T]]:
+        results = defaultdict[bool, list[T]](list)
+        for key, group in it.groupby(self, predicate):
+            results[bool(key)].extend(group)
+        return SeqIter(results[True]), SeqIter(results[False])
+
 
 @tp.final
 class SeqIter[T](Sequence[T]):
@@ -1702,6 +1710,11 @@ class SeqIter[T](Sequence[T]):
             if isinstance(index, int)
             else SeqIter(self.iterable[index])
         )
+
+    @tp.override
+    def __eq__(self, value: object, /) -> bool:
+        value = tp.cast(SeqIter[T], value)
+        return isinstance(value, SeqIter) and self._iterable == value._iterable  # pyright: ignore[reportUnnecessaryIsInstance]
 
     @tp.override
     def __len__(self) -> int:
