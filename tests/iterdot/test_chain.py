@@ -9,6 +9,7 @@ import pytest
 
 from iterdot.chain import Iter, SeqIter
 from iterdot.defaults import Default, Pad, Raise
+from iterdot.operators import LessThan
 
 
 def consume(iterable: Iterable[Any]):
@@ -346,6 +347,13 @@ def test_foreach(capsys):
 3
 4
 """
+    )
+
+
+def test_partition():
+    assert Iter_range_10().partition(LessThan(5)) == (
+        SeqIter(range(5)),
+        SeqIter(range(5, 10)),
     )
 
 
