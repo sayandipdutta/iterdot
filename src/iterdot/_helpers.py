@@ -2,6 +2,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import wraps
 from itertools import chain, islice
+from operator import call
 from types import NoneType
 from typing import cast
 
@@ -18,6 +19,9 @@ def flatten(iterable: Iterable[object]) -> Iterable[object]:
             yield from flatten(cast(Iterable[object], item))
         else:
             yield item
+
+
+consume = deque[object](maxlen=0).extend
 
 
 def skip_take_by_order[**P, R](func: Callable[P, R]) -> Callable[P, R]:
@@ -63,31 +67,10 @@ def sliding_window_iter[T, F](
 ) -> Iterator[tuple[T, ...]] | Iterator[tuple[T | F, ...]]:
     match uneven:
         case Pad(fillvalue=pad):
-            window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
-            if not window:
-                return
-
-            if (wl := len(window)) < n:
-                yield tuple(window) + (pad,) * (wl - n)
-                return
-            while last:
-                yield tuple(window)
-                last = tuple(islice(it, stride))
-                ll = len(last)
-                if ll == stride:
-                    window.extend(last)
-                    continue
-                elif ll == 0:
-                    wl = len(window)
-                    while (wl := wl - stride) > 0:
-                        window.extend((pad,) * stride)
-                        yield tuple(window)
-                    return
-                else:
-                    if stride - ll >= n:
-                        return
-                    last += (pad,) * (stride - ll)
-                    window.extend(last)
+            yield from (
+                item if (il := len(item)) == n else (item + (pad,) * (n - il))
+                for item in sliding_window_iter(it, n, stride=stride, uneven=None)
+            )
         case Ignore():
             window = deque[T | F](last := tuple(islice(it, n)), maxlen=n)
             if not window:
@@ -112,34 +95,20 @@ def sliding_window_iter[T, F](
             if not window:
                 return
 
-            while last:
+            while True:
                 yield tuple(window)
-                last = tuple(islice(it, stride))
-                ll = len(last)
-                if ll == stride:
-                    window.extend(last)
-                    continue
-                elif ll == 0:
-                    wl = len(window)
-                    while (wl := wl - stride) > 0:
-                        yield tuple(window)[-wl:]
-                    return
-                else:
-                    if stride - ll >= n:
+                n1 = min(stride, len(window))
+                consume(map(call, [window.popleft] * n1))
+                stride_remaining = tuple(islice(it, stride - n1))
+                if stride - n1 > 0 and not stride_remaining:
+                    if not window:
                         return
-                    wl = len(window)
-                    while (wl := wl - stride) > 0:
-                        yield tuple(window)[-wl:]
-                    else:
-                        remainder = stride - len(window)
-                        while window:
-                            _ = window.popleft()
-                        window.extend(last)
-                        if remainder > 0:
-                            for _ in range(remainder):
-                                _ = window.popleft()
-                        yield tuple(window)
+                else:
+                    window.extend(islice(it, stride))
+                if not window:
                     return
+        case unknown:  # # pyright: ignore[reportUnnecessaryComparison]
+            raise ValueError(f"Received unknown value for uneven: {unknown!r}")  # pyright: ignore[reportUnreachable]
 
 
 def sliding_window_seq[T, F](
@@ -157,9 +126,8 @@ def sliding_window_seq[T, F](
     match uneven:
         case Pad(fillvalue=pad):
             if len(last) < n:
-                rest.append(last + (pad,) * (n - len(last)))
-            else:
-                rest.append(last)
+                last += (pad,) * (n - len(last))
+            rest.append(last)
             return rest
         case NoneType():
             return result

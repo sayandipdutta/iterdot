@@ -37,6 +37,15 @@ def test_sliding_window_iter_none() -> None:
     ) == [
         (1, 2, 3),
     ]  # fmt: skip
+    assert list(sliding_window_iter(
+        iter([1, 2, 3, 4, 5]), 3, stride=1)
+    ) == [
+        (1, 2, 3),
+        (2, 3, 4),
+        (3, 4, 5),
+        (4, 5),
+        (5,),
+    ]  # fmt: skip
 
 
 def test_sliding_window_iter_pad() -> None:
@@ -105,6 +114,13 @@ def test_sliding_window_iter_ignore() -> None:
         iter([1, 2, 3, 4, 5]), 3, stride=5, uneven=Ignore())
     ) == [
         (1, 2, 3),
+    ]  # fmt: skip
+    assert list(sliding_window_iter(
+        iter([1, 2, 3, 4, 5]), 3, stride=1, uneven=Ignore())
+    ) == [
+        (1, 2, 3),
+        (2, 3, 4),
+        (3, 4, 5),
     ]  # fmt: skip
 
 
