@@ -133,6 +133,27 @@ class Iter[T](Iterator[T]):
 
         return Iter(gen())
 
+    @classmethod
+    def repeat(cls, value: T, times: int | None = None) -> tp.Self:
+        """Create an Iter that repeats a value a specified number of times or infinitely.
+
+        Args:
+            value: The value to repeat
+            times: Number of times to repeat the value. If None, repeat infinitely.
+
+        Returns:
+            Iter: Iterator repeating the value
+
+        Example:
+            >>> Iter.repeat(1, times=3).to_list()
+            [1, 1, 1]
+            >>> Iter.repeat('a', times=2).to_list()
+            ['a', 'a']
+            >>> Iter.repeat(True).slice(stop=4).to_list()
+            [True, True, True, True]
+        """
+        return cls(it.repeat(value) if times is None else it.repeat(value, times))
+
     def peek_next_index(self) -> int:
         """Peek the next index that would be yielded, if there is element left to yield.
 
