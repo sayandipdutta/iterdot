@@ -1,8 +1,7 @@
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import wraps
-from itertools import chain, groupby, islice, takewhile
-from operator import call
+from itertools import chain, groupby, islice, repeat, takewhile
 from types import NoneType
 from typing import cast
 
@@ -90,7 +89,7 @@ def sliding_window_iter[T, F](
                 yield tuple(window)
                 window.extend(stride_remaining := tuple(islice(it, stride)))
                 num_pop = min(len(window), stride - len(stride_remaining))
-                consume(map(call, [window.popleft] * num_pop))
+                consume(window.popleft() for _ in repeat(None, num_pop))
 
         case unknown:  # # pyright: ignore[reportUnnecessaryComparison]
             raise ValueError(f"Received unknown value for uneven: {unknown!r}")  # pyright: ignore[reportUnreachable]
