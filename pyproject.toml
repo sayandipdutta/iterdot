@@ -1,10 +1,29 @@
 [project]
 name = "iterdot"
 version = "0.2.4"
-description = "Add your description here"
+authors = [{ name = "Sayandip Dutta", email = "sayandip199309@gmail.com" }]
+description = "Fully typed Python iterator with method chaining"
 readme = "README.md"
 requires-python = ">=3.13"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Software Development",
+
+    "License :: OSI Approved :: MIT License",
+
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+keywords = ["iterator", "method chaining", "fluent interface"]
 dependencies = []
+
+
+[project.urls]
+Homepage = "https://github.com/sayandipdutta/iterdot"
+Repository = "https://github.com/sayandipdutta/iterdot.git"
+GitHub = "https://github.com/sayandipdutta/iterdot.git"
+Download = "https://github.com/sayandipdutta/iterdot/releases/latest"
+Issues = "https://github.com/sayandipdutta/iterdot/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -35,24 +54,23 @@ preview = true
 [tool.ruff.lint]
 preview = true
 select = [
-    "E",   # pycodestyle
-    "F",   # Pyflakes
-    "FA",  # future annotations
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "SIM", # flake8-simplify
-    "I",   # isort
-    "ANN", # type annotations
-    "FBT", # boolean trap
-    "C4",  # flake8-comprehension
-    "PT",  # flake8-pytest-style
-    "TCH", # flake8-type-checking
-    # pylint
-    # "PL",
-    "RUF",
-    "DOC",
-    "FURB",
-    "PERF",
+    "E",    # pycodestyle
+    "F",    # Pyflakes
+    "FA",   # future annotations
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",    # isort
+    "ANN",  # type annotations
+    "FBT",  # boolean trap
+    "C4",   # flake8-comprehension
+    "PT",   # flake8-pytest-style
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific rules
+    "DOC",  # pydoclint
+    "FURB", # refurb
+    "PERF", # perflint
+    # "PL",   # pylint
 ]
 
 [tool.ruff.lint.pycodestyle]
