@@ -2519,7 +2519,7 @@ class SeqIter[T](Sequence[T]):
                 raises error if not found. (default: Default.NoDefault)
 
         Returns:
-            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+            If found returns Indexed object, otherwise return default if given.
 
         Example:
             >>> SeqIter([1, 2, 3, 4]).find(2)
