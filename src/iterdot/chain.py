@@ -356,31 +356,49 @@ class Iter[T](Iterator[T]):
     def collect(self: Iter[T]) -> Collector[T]:
         return Collector[T](self)
 
+    @tp.overload
     def find(
-        self: Iterable[T], finder: Callable[[T], bool] | T
-    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        self: Iterable[T],
+        finder: Callable[[T], bool] | T,
+        default: tp.Literal[Default.NoDefault] = NoDefault,
+    ) -> Indexed[T]: ...
+    @tp.overload
+    def find[F](
+        self: Iterable[T],
+        finder: Callable[[T], bool] | T,
+        default: F,
+    ) -> Indexed[T] | F: ...
+    def find[F](
+        self: Iterable[T],
+        finder: Callable[[T], bool] | T,
+        default: F = NoDefault,
+    ) -> Indexed[T] | F:
         """
         Find a value and its index in the iterable, either by passing the value to find or a callable
 
         Args:
             finder (T | callable): Either the value to find, or a callable that returns True for the item
+            default: Default value to return, if not given or Default.NoDefault it has no effect.
+                (default: Default.NoDefault)
 
         Returns:
-            Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
+            If found returns Indexed object, otherwise return default.
 
         Example:
             >>> Iter([1, 2, 3, 4]).find(2)
             Indexed(idx=1, value=2)
             >>> Iter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
             Indexed(idx=1, value=2)
-            >>> Iter([1, 2, 3, 4]).find(5)
+            >>> Iter([1, 2, 3, 4]).find(5, default=Default.Unavailable)
             <Default.Unavailable: 3>
         """
         itbl = self if isinstance(self, Iter) else Iter(self)
         if callable(finder):
             finder = tp.cast(Callable[[T], bool], finder)
-            return itbl.enumerate().filter(lambda x: finder(x.value)).next(Unavailable)
-        return itbl.enumerate().filter(IsEqual(finder)).next(Unavailable)
+            return (
+                itbl.enumerate().filter(lambda x: finder(x.value)).next(default=default)
+            )
+        return itbl.enumerate().filter(IsEqual(finder)).next(default=default)
 
     @tp.overload
     def max[TComparable: Comparable, F](
@@ -2475,14 +2493,30 @@ class SeqIter[T](Sequence[T]):
         del _
         return self
 
+    @tp.overload
     def find(
-        self, finder: Callable[[T], bool] | T
-    ) -> Indexed[T] | tp.Literal[Default.Unavailable]:
+        self,
+        finder: Callable[[T], bool] | T,
+        default: tp.Literal[Default.NoDefault] = NoDefault,
+    ) -> Indexed[T]: ...
+    @tp.overload
+    def find[F](
+        self,
+        finder: Callable[[T], bool] | T,
+        default: F,
+    ) -> Indexed[T] | F: ...
+    def find[F](
+        self,
+        finder: Callable[[T], bool] | T,
+        default: F = NoDefault,
+    ) -> Indexed[T] | F:
         """
         Find a value and its index in the iterable, either by passing the value to find or a callable
 
         Args:
             finder (T | callable): Either the value to find, or a callable that returns True for the item
+            default: Default to return if not found. If not given or default is Default.NoDefault it
+                raises error if not found. (default: Default.NoDefault)
 
         Returns:
             Indexed[T] | Default.Unavailable: If found returns Indexed object, otherwise return Unavailable.
@@ -2492,18 +2526,13 @@ class SeqIter[T](Sequence[T]):
             Indexed(idx=1, value=2)
             >>> SeqIter([1, 2, 3, 4]).find(lambda x: x**2 == 4)
             Indexed(idx=1, value=2)
-            >>> SeqIter([1, 2, 3, 4]).find(5)
+            >>> SeqIter([1, 2, 3, 4]).find(5, default=Default.Unavailable)
             <Default.Unavailable: 3>
         """
         if callable(finder):
             finder = tp.cast(Callable[[T], bool], finder)
-            return (
-                self.iter()
-                .enumerate()
-                .filter(lambda x: finder(x.value))
-                .next(Unavailable)
-            )
-        return self.iter().enumerate().filter(IsEqual(finder)).next(Unavailable)
+            return self.iter().enumerate().filter(lambda x: finder(x.value)).next(default)
+        return self.iter().enumerate().filter(IsEqual(finder)).next(default)
 
     def len(self) -> int:
         """Get the length of the sequence.
