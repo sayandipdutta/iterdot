@@ -1387,23 +1387,21 @@ class Iter[T](Iterator[T]):
             f"{missing_policy=} not recognized. Choices: Raise | Ignore | Pad"
         )
 
-    def product_2[T2](self: Iterable[T], other: Iterable[T2]) -> Iter[tuple[T, T2]]:
-        """
-        see itertools.product
-
-        Returns:
-            cartesian product of two iterables
-        """
-        return Iter(it.product(self, other))
-
-    def product_3[T2, T3](
+    def product3[T2, T3](
         self, it1: Iterable[T2], it2: Iterable[T3]
     ) -> Iter[tuple[T, T2, T3]]:
-        """
-        see itertools.product
+        """Calculate the cartesian product with two other iterables.
+
+        Args:
+            it1: First iterable to calculate product with
+            it2: Second iterable to calculate product with
 
         Returns:
-            cartesian product of three iterables
+            Iter: Iterator over tuples containing cartesian product
+
+        Example:
+            >>> Iter([1]).product3(['a', 'b'], [True, False]).to_list()
+            [(1, 'a', True), (1, 'a', False), (1, 'b', True), (1, 'b', False)]
         """
         return Iter(it.product(self, it1, it2))
 
@@ -1724,24 +1722,6 @@ class Iter[T](Iterator[T]):
                     yield res
 
         return Iter(apply())
-
-    def product3[T2, T3](
-        self, it1: Iterable[T2], it2: Iterable[T3]
-    ) -> Iter[tuple[T, T2, T3]]:
-        """Calculate the cartesian product with two other iterables.
-
-        Args:
-            it1: First iterable to calculate product with
-            it2: Second iterable to calculate product with
-
-        Returns:
-            Iter: Iterator over tuples containing cartesian product
-
-        Example:
-            >>> Iter([1]).product3(['a', 'b'], [True, False]).to_list()
-            [(1, 'a', True), (1, 'a', False), (1, 'b', True), (1, 'b', False)]
-        """
-        return Iter(it.product(self, it1, it2))
 
     def is_empty(self) -> bool:
         """
