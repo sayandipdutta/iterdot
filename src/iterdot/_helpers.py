@@ -3,7 +3,6 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import wraps
 from itertools import chain, groupby, islice, repeat, takewhile
 from types import NoneType
-from typing import cast
 
 from iterdot.defaults import Ignore, MissingPolicy, Pad, Raise
 
@@ -15,7 +14,7 @@ def prepend[T](*val: T, to: Iterator[T]) -> Iterator[T]:
 def flatten(iterable: Iterable[object]) -> Iterable[object]:
     for item in iterable:
         if isinstance(item, Iterable) and not isinstance(item, str):
-            yield from flatten(cast(Iterable[object], item))
+            yield from flatten(item)
         else:
             yield item
 
