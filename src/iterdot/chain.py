@@ -116,15 +116,15 @@ class Iter[T](Iterator[T]):
 
         def gen() -> Generator[T]:
             if window_size is None:
-                item = tp.cast(T, start)
-                func = tp.cast(Callable[[T], T], producer)
+                item = tp.cast("T", start)
+                func = tp.cast("Callable[[T], T]", producer)
                 yield item
                 while True:
                     yield (item := func(item))
             else:
-                items = tp.cast(tuple[T, ...], start)
+                items = tp.cast("tuple[T, ...]", start)
                 assert len(items) == window_size, "window_size != len(start)"
-                func = tp.cast(Callable[[Iterable[T]], T], producer)
+                func = tp.cast("Callable[[Iterable[T]], T]", producer)
                 window = deque(items, maxlen=len(items))
                 yield from window
                 while True:
@@ -279,7 +279,7 @@ class Iter[T](Iterator[T]):
     # TODO: Replace type[K] with TypeForm (when available)
     def getattr[K](self: Iterable[T], *names: str, type: type[K]) -> Iter[K]:
         del type
-        func = tp.cast(Callable[[T], K], attrgetter(*names))  # pyright: ignore[reportInvalidCast]
+        func = tp.cast("Callable[[T], K]", attrgetter(*names))  # pyright: ignore[reportInvalidCast]
         return Iter(map(func, self))
 
     def compress(self: Iterable[T], selectors: Iterable[object]) -> Iter[T]:
@@ -393,7 +393,7 @@ class Iter[T](Iterator[T]):
         """
         itbl = self if isinstance(self, Iter) else Iter(self)
         if callable(finder):
-            finder = tp.cast(Callable[[T], bool], finder)
+            finder = tp.cast("Callable[[T], bool]", finder)
             return (
                 itbl.enumerate().filter(lambda x: finder(x.value)).next(default=default)
             )
@@ -1142,8 +1142,8 @@ class Iter[T](Iterator[T]):
             [1, 2, 3, 4, 5, 6]
         """
         if iterable is None:
-            return Iter(it.chain.from_iterable(tp.cast(Iter[Iterable[K1]], self)))
-        return Iter(it.chain(tp.cast(Iter[T], self), it.chain.from_iterable(iterable)))
+            return Iter(it.chain.from_iterable(tp.cast("Iter[Iterable[K1]]", self)))
+        return Iter(it.chain(tp.cast("Iter[T]", self), it.chain.from_iterable(iterable)))
 
     @tp.overload
     def reduce(
@@ -1846,7 +1846,7 @@ class SeqIter[T](Sequence[T]):
 
     @tp.override
     def __eq__(self, value: object, /) -> bool:
-        value = tp.cast(SeqIter[T], value)
+        value = tp.cast("SeqIter[T]", value)
         return isinstance(value, SeqIter) and self._iterable == value._iterable  # pyright: ignore[reportUnnecessaryIsInstance]
 
     @tp.override
@@ -2034,8 +2034,11 @@ class SeqIter[T](Sequence[T]):
 
         This is a unified implementation for both single and multi-argument mapping.
         See the overload signatures for specific documentation.
+
+        Returns:
+            SeqIter[R]: New sequence with function applied
         """
-        return SeqIter(map(func, self, *args))  # noqa: DOC201
+        return SeqIter(map(func, self, *args))
 
     def all(self, predicate: Callable[[T], bool] | None = None) -> bool:
         """
@@ -2538,7 +2541,7 @@ class SeqIter[T](Sequence[T]):
             <Default.Unavailable: 3>
         """
         if callable(finder):
-            finder = tp.cast(Callable[[T], bool], finder)
+            finder = tp.cast("Callable[[T], bool]", finder)
             return self.iter().enumerate().filter(lambda x: finder(x.value)).next(default)
         return self.iter().enumerate().filter(IsEqual(finder)).next(default)
 
