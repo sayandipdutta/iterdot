@@ -246,7 +246,6 @@ class Iter[T](Iterator[T]):
         """
         return self._last_yielded_index
 
-    # NOTE: consider if it should error
     @tp.overload
     def next[TDefault](self, default: tp.Literal[Default.NoDefault] = NoDefault) -> T: ...
     @tp.overload
@@ -923,7 +922,6 @@ class Iter[T](Iterator[T]):
         except StopIteration as err:
             raise StopIteration("Underlying iterable is empty") from err
 
-    # TODO: support getitem
     @tp.overload
     def at[TDefault](self, n: int, default: tp.Literal[Default.NoDefault]) -> T: ...
     @tp.overload
@@ -977,9 +975,9 @@ class Iter[T](Iterator[T]):
                 self if predicate is None else filter(predicate, self),
                 maxlen=1,
             ).popleft()
-        except IndexError as err:
+        except IndexError:
             if default is NoDefault:
-                raise StopIteration("Underlying iterable is empty") from err
+                raise StopIteration("Underlying iterable is empty") from None
             return default
 
     def tail(self: Iterable[T], n: int) -> Iter[T]:
@@ -1147,7 +1145,6 @@ class Iter[T](Iterator[T]):
             return Iter(it.chain.from_iterable(tp.cast(Iter[Iterable[K1]], self)))
         return Iter(it.chain(tp.cast(Iter[T], self), it.chain.from_iterable(iterable)))
 
-    # TODO: consider default
     @tp.overload
     def reduce(
         self: Iterable[T], func: Callable[[T, T], T], initial: T | None = None
@@ -2157,7 +2154,6 @@ class SeqIter[T](Sequence[T]):
             return default
         raise IndexError("iterable is empty, and no default specified for first.")
 
-    # TODO: support getitem
     @tp.overload
     def at[TDefault](
         self, n: int, default: tp.Literal[Default.NoDefault] = NoDefault
@@ -2317,7 +2313,6 @@ class SeqIter[T](Sequence[T]):
             selectors = self._get_skip_take_selectors((False, skip), (True, take))
         return SeqIter(it.compress(self, selectors))
 
-    # TODO: consider default
     def reduce(self, func: Callable[[T, T], T], initial: T | None = None) -> T:
         """Reduce the sequence using a binary function.
 
