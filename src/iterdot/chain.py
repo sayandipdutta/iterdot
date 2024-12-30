@@ -913,15 +913,15 @@ class Iter[T](Iterator[T]):
             1
         """
         try:
-            if default is NoDefault:
-                return next(filter(predicate, self)) if predicate else next(self)
+            if predicate is None:
+                return next(self) if default is NoDefault else next(self, default)
             return (
-                next(filter(predicate, self), default)
-                if predicate
-                else next(self, default)
+                next(filter(predicate, self))
+                if default is NoDefault
+                else next(filter(predicate, self), default)
             )
-        except StopIteration:
-            raise StopIteration from None
+        except StopIteration as err:
+            raise StopIteration("Underlying iterable is empty") from err
 
     # TODO: support getitem
     @tp.overload
@@ -932,10 +932,18 @@ class Iter[T](Iterator[T]):
         return self.skip(n).next(default)
 
     @tp.overload
-    def last[TDefault](self, default: tp.Literal[Default.NoDefault]) -> T: ...
+    def last[TDefault](
+        self,
+        default: tp.Literal[Default.NoDefault],
+        predicate: Predicate[T] | None = None,
+    ) -> T: ...
     @tp.overload
-    def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault: ...
-    def last[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+    def last[TDefault](
+        self, default: TDefault = Exhausted, predicate: Predicate[T] | None = None
+    ) -> T | TDefault: ...
+    def last[TDefault](
+        self, default: TDefault = Exhausted, predicate: Predicate[T] | None = None
+    ) -> T | TDefault:
         """
         Return the last item of self, or default if Iterable is empty.
 
@@ -943,6 +951,8 @@ class Iter[T](Iterator[T]):
             default (optional): Return default if default is not empty, and iterable is empty.
                 If default == NoDefault, ValueError is raised if iterable is empty.
                 default: Default.Exhausted
+            predicate (optional): A callable that returns bool, if given, return the last
+                element that satisfies the predicate.
 
         Returns:
             T | TDefault: last item in self, or default.
@@ -959,12 +969,17 @@ class Iter[T](Iterator[T]):
             Traceback (most recent call last):
                 ...
             StopIteration: Underlying iterable is empty
+            >>> Iter([0, 1, 2, 3]).last(predicate=lambda x: x % 2 == 1)
+            3
         """
         try:
-            return deque(self, maxlen=1).popleft()
-        except IndexError:
+            return deque(
+                self if predicate is None else filter(predicate, self),
+                maxlen=1,
+            ).popleft()
+        except IndexError as err:
             if default is NoDefault:
-                raise StopIteration("Underlying iterable is empty") from None
+                raise StopIteration("Underlying iterable is empty") from err
             return default
 
     def tail(self: Iterable[T], n: int) -> Iter[T]:
