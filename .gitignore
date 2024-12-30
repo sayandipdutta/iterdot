@@ -3,3 +3,4 @@ __pycache__
 .env*
 pyrightconfig.json
 *.config
+.vscode/launch.json

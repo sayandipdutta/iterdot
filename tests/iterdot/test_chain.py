@@ -12,7 +12,7 @@ from iterdot.defaults import Default, Pad, Raise
 from iterdot.operators import LessThan
 
 
-def consume(iterable: Iterable[Any]):
+def consume(iterable: Iterable[Any]):  # pyright: ignore[reportExplicitAny]
     _ = deque(iterable, maxlen=0)
 
 

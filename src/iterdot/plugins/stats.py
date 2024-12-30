@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import statistics as st
 import typing as tp
-from collections.abc import Callable, Iterable
 from decimal import Decimal
 from fractions import Fraction
 from functools import wraps
+
+if tp.TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 
 # TODO: a better way to register modules
@@ -64,6 +66,6 @@ class stats[TNumber: (float, Decimal, Fraction) = float]:
             minimum=min(lst),
             maximum=max(lst),
             quantiles=tuple[TNumber, TNumber, TNumber](
-                st.quantiles(tp.cast(Iterable[TNumber], lst), n=4, method="inclusive")
+                st.quantiles(tp.cast("Iterable[TNumber]", lst), n=4, method="inclusive")
             ),
         )
