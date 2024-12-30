@@ -872,10 +872,18 @@ class Iter[T](Iterator[T]):
         return Iter(it.starmap(func, itbl))
 
     @tp.overload
-    def first[TDefault](self, default: tp.Literal[Default.NoDefault]) -> T: ...
+    def first[TDefault](
+        self,
+        default: tp.Literal[Default.NoDefault],
+        predicate: Predicate[T] | None = None,
+    ) -> T: ...
     @tp.overload
-    def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault: ...
-    def first[TDefault](self, default: TDefault = Exhausted) -> T | TDefault:
+    def first[TDefault](
+        self, default: TDefault = Exhausted, predicate: Predicate[T] | None = None
+    ) -> T | TDefault: ...
+    def first[TDefault](
+        self, default: TDefault = Exhausted, predicate: Predicate[T] | None = None
+    ) -> T | TDefault:
         """
         Return the first item of self, or default if Iterable is empty.
 
@@ -883,6 +891,8 @@ class Iter[T](Iterator[T]):
             default (optional): Return default if default is not empty, and iterable is empty.
                 If default == Default.NoDefault, ValueError is raised if iterable is empty.
                 default: Default.Exhausted
+            predicate (optional): A callable that returns bool, if given, return the first
+                element that satisfies the predicate.
 
         Returns:
             T | TDefault: first item in self, or default.
@@ -899,9 +909,17 @@ class Iter[T](Iterator[T]):
             Traceback (most recent call last):
                 ...
             StopIteration
+            >>> Iter([0, 1, 2, 3]).first(predicate=lambda x: x % 2 == 1)
+            1
         """
         try:
-            return next(self) if default is NoDefault else next(self, default)
+            if default is NoDefault:
+                return next(filter(predicate, self)) if predicate else next(self)
+            return (
+                next(filter(predicate, self), default)
+                if predicate
+                else next(self, default)
+            )
         except StopIteration:
             raise StopIteration from None
 
