@@ -31,3 +31,6 @@ class SupportsSumNoDefault(
 
 class SupportsSub(tp.Protocol):
     def __sub__(self, other: tp.Self) -> tp.Self: ...
+
+
+type Falsy = tp.Literal[False, 0, None, ""] | tuple[()]

@@ -41,7 +41,13 @@ from iterdot.index import Indexed
 from iterdot.minmax import MinMax, lazy_minmax, lazy_minmax_keyed
 from iterdot.operators import IsEqual, Unpacked
 from iterdot.plugins.stats import stats
-from iterdot.wtyping import Comparable, Predicate, SupportsAdd, SupportsSumNoDefault
+from iterdot.wtyping import (
+    Comparable,
+    Falsy,
+    Predicate,
+    SupportsAdd,
+    SupportsSumNoDefault,
+)
 
 
 @tp.final
@@ -1728,13 +1734,14 @@ class Iter[T](Iterator[T]):
         return Iter(it.groupby(self, key))
 
     def filter_map[R](
-        self: Iterable[T], predicate_apply: Callable[[T], tp.Literal[False] | R]
+        self: Iterable[T],
+        predicate_apply: Callable[[T], R | Falsy],
     ) -> Iter[R]:
         """
         Map on filtered elements.
 
         Args:
-            predicate_apply (callable): A callable that either evaluates to False or returns a value
+            predicate_apply (callable): A callable that either evaluates to falsy value or truthy value
 
         Returns:
             Iter[R]
