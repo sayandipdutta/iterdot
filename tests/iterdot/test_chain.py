@@ -3,7 +3,7 @@ import itertools as itl
 from collections import deque
 from collections.abc import Iterable
 from operator import add
-from typing import Any, no_type_check
+from typing import no_type_check
 
 import pytest
 
@@ -12,7 +12,7 @@ from iterdot.defaults import Default, Pad, Raise
 from iterdot.operators import LessThan
 
 
-def consume(iterable: Iterable[Any]):  # pyright: ignore[reportExplicitAny]
+def consume(iterable: Iterable[object]):
     _ = deque(iterable, maxlen=0)
 
 
@@ -122,7 +122,7 @@ def test_pairwise():
 
 def test_batched():
     rng = range(5)
-    assert Iter(rng).batched(2).to_list() == list(itl.batched(rng, 2))
+    assert Iter(rng).batched(2).to_list() == list(itl.batched(rng, 2, strict=False))
 
     with pytest.raises(ValueError, match="incomplete batch"):
         _ = list(itl.batched(rng, 2, strict=True))
@@ -145,11 +145,11 @@ def test_slice(integers_from_0_to_1000: list[int]):
     assert Iter(integers_from_0_to_1000).slice(
         start=0, stop=None, step=100
     ).to_list() == list(range(0, 1001, 100))
-    with pytest.raises(ValueError, match="None|integer"):
+    with pytest.raises(ValueError, match=r"None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(stop=-1).to_list()
-    with pytest.raises(ValueError, match="None|integer"):
+    with pytest.raises(ValueError, match=r"None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(start=0, stop=-1).to_list()
-    with pytest.raises(ValueError, match="None|integer"):
+    with pytest.raises(ValueError, match=r"None|integer"):
         _ = Iter(integers_from_0_to_1000).slice(start=0, stop=5, step=-1).to_list()
 
 
@@ -163,7 +163,7 @@ def test_zip():
     assert Iter(range(4)).zip(range(5, 10), missing_policy=Pad(None)).to_list() == list(
         itl.zip_longest(range(4), range(5, 10), fillvalue=None)
     )
-    with pytest.raises(ValueError, match="shorter|longer"):
+    with pytest.raises(ValueError, match=r"shorter|longer"):
         _ = Iter(range(4)).zip(range(5, 10), missing_policy=Raise()).to_list()
 
 
