@@ -9,4 +9,4 @@ runs:
       with:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
-        version: "0.5.2"
+        version: "0.5.13"
