@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: uv lock
+      - run: uv lock --locked
 
   linting:
     runs-on: ubuntu-latest
